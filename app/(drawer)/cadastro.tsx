@@ -1,37 +1,39 @@
+import { Link, router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { Link, router } from "expo-router";
+
+import { userService } from "../../services/userService";
 
 const { width } = Dimensions.get("window");
-const logoImage = require("../../assets/images/logo.png");
 
 export default function Cadastro() {
-  const [nome, setNome] = useState("");
+  const [nomeCompleto, setNomeCompleto] = useState("");
   const [email, setEmail] = useState("");
   const [cpf, setCpf] = useState("");
   const [dataNascimento, setDataNascimento] = useState("");
   const [senha, setSenha] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
+  // Estado definido estritamente com os termos do enum do Prisma (sem acento)
+  const [tipoUsuario, setTipoUsuario] = useState<"cliente" | "anfitriao">(
+    "cliente",
+  );
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
-  const [carregandoGoogle, setCarregandoGoogle] = useState(false);
 
-  // Função para formatar CPF
   const formatarCPF = (texto: string) => {
     let cpfFormatado = texto.replace(/\D/g, "");
     if (cpfFormatado.length <= 11) {
@@ -42,7 +44,6 @@ export default function Cadastro() {
     return cpfFormatado;
   };
 
-  // Função para formatar Data de Nascimento
   const formatarData = (texto: string) => {
     let dataFormatada = texto.replace(/\D/g, "");
     if (dataFormatada.length <= 8) {
@@ -52,58 +53,58 @@ export default function Cadastro() {
     return dataFormatada;
   };
 
-  // Função para validar CPF
   const validarCPF = (cpf: string) => {
     const cpfLimpo = cpf.replace(/\D/g, "");
     if (cpfLimpo.length !== 11) return false;
-    
-    // Verifica se todos os dígitos são iguais
     if (/^(\d)\1{10}$/.test(cpfLimpo)) return false;
-    
-    // Validação do primeiro dígito verificador
+
     let soma = 0;
-    for (let i = 0; i < 9; i++) {
-      soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
-    }
+    for (let i = 0; i < 9; i++) soma += parseInt(cpfLimpo.charAt(i)) * (10 - i);
     let resto = 11 - (soma % 11);
     let digitoVerificador1 = resto === 10 || resto === 11 ? 0 : resto;
     if (digitoVerificador1 !== parseInt(cpfLimpo.charAt(9))) return false;
-    
-    // Validação do segundo dígito verificador
+
     soma = 0;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 10; i++)
       soma += parseInt(cpfLimpo.charAt(i)) * (11 - i);
-    }
     resto = 11 - (soma % 11);
     let digitoVerificador2 = resto === 10 || resto === 11 ? 0 : resto;
     if (digitoVerificador2 !== parseInt(cpfLimpo.charAt(10))) return false;
-    
+
     return true;
   };
 
-  // Função para validar idade (mínimo 18 anos)
   const validarIdade = (data: string) => {
     const partes = data.split("/");
     if (partes.length !== 3) return false;
-    
+
     const dia = parseInt(partes[0]);
     const mes = parseInt(partes[1]) - 1;
     const ano = parseInt(partes[2]);
-    
+
     const dataNasc = new Date(ano, mes, dia);
     const hoje = new Date();
     let idade = hoje.getFullYear() - dataNasc.getFullYear();
     const diferencaMeses = hoje.getMonth() - dataNasc.getMonth();
-    
-    if (diferencaMeses < 0 || (diferencaMeses === 0 && hoje.getDate() < dataNasc.getDate())) {
+
+    if (
+      diferencaMeses < 0 ||
+      (diferencaMeses === 0 && hoje.getDate() < dataNasc.getDate())
+    ) {
       idade--;
     }
-    
     return idade >= 18;
   };
 
-  const handleCadastro = () => {
-    if (!nome || !email || !cpf || !dataNascimento || !senha || !confirmarSenha) {
+  const handleCadastro = async () => {
+    if (
+      !nomeCompleto ||
+      !email ||
+      !cpf ||
+      !dataNascimento ||
+      !senha ||
+      !confirmarSenha
+    ) {
       Alert.alert("Atenção", "Preencha todos os campos!");
       return;
     }
@@ -114,7 +115,10 @@ export default function Cadastro() {
     }
 
     if (!validarIdade(dataNascimento)) {
-      Alert.alert("Erro", "Você deve ter pelo menos 18 anos para se cadastrar!");
+      Alert.alert(
+        "Erro",
+        "Você deve ter pelo menos 18 anos para se cadastrar!",
+      );
       return;
     }
 
@@ -130,30 +134,41 @@ export default function Cadastro() {
 
     setCarregando(true);
 
-    setTimeout(() => {
-      setCarregando(false);
+    try {
+      const cpfLimpo = cpf.replace(/\D/g, "");
+      const [dia, mes, ano] = dataNascimento.split("/");
+      const dataFormatadaISO = `${ano}-${mes}-${dia}`;
+
+      const dadosUsuario = {
+        nome_completo: nomeCompleto,
+        email: email.toLowerCase().trim(),
+        senha: senha,
+        cpf: cpfLimpo,
+        data_nascimento: dataFormatadaISO,
+        tipo_usuario: tipoUsuario,
+      };
+
+      await userService.create(dadosUsuario);
+
       Alert.alert("Sucesso", "Cadastro realizado com sucesso!", [
         { text: "OK", onPress: () => router.replace("/login") },
       ]);
-    }, 1500);
-  };
+    } catch (error: any) {
+      console.error("Erro detalhado no clique do botão:", error);
 
-  const handleGoogleSignup = () => {
-    setCarregandoGoogle(true);
+      const dadosErro = error.response?.data;
+      const mensagemErro =
+        dadosErro?.message ||
+        error.message ||
+        "Erro desconhecido ao conectar ao servidor.";
 
-    setTimeout(() => {
-      setCarregandoGoogle(false);
       Alert.alert(
-        "Google Sign Up",
-        "Cadastro com Google realizado com sucesso!",
-        [
-          {
-            text: "OK",
-            onPress: () => router.replace("/index"),
-          },
-        ],
+        "Erro no Cadastro",
+        Array.isArray(mensagemErro) ? mensagemErro[0] : mensagemErro,
       );
-    }, 1500);
+    } finally {
+      setCarregando(false);
+    }
   };
 
   return (
@@ -167,28 +182,66 @@ export default function Cadastro() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo e Título */}
           <View style={styles.header}>
             <Text style={styles.title}>Criar conta</Text>
             <Text style={styles.subtitle}>Cadastre-se para começar</Text>
           </View>
 
-          {/* Formulário */}
           <View style={styles.form}>
-            {/* Campo Nome */}
+            {/* Seletor do Tipo de Usuário */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Quero me cadastrar como:</Text>
+              <View style={styles.selectorContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.selectorButton,
+                    tipoUsuario === "cliente" && styles.selectorButtonActive,
+                  ]}
+                  onPress={() => setTipoUsuario("cliente")}
+                >
+                  <Text
+                    style={[
+                      styles.selectorButtonText,
+                      tipoUsuario === "cliente" &&
+                        styles.selectorButtonTextActive,
+                    ]}
+                  >
+                    👤 Cliente
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.selectorButton,
+                    tipoUsuario === "anfitriao" && styles.selectorButtonActive,
+                  ]}
+                  onPress={() => setTipoUsuario("anfitriao")}
+                >
+                  <Text
+                    style={[
+                      styles.selectorButtonText,
+                      tipoUsuario === "anfitriao" &&
+                        styles.selectorButtonTextActive,
+                    ]}
+                  >
+                    🏠 Anfitrião
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Nome completo</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Seu nome"
+                placeholder="Seu nome completo"
                 placeholderTextColor="#999"
-                value={nome}
-                onChangeText={setNome}
+                value={nomeCompleto}
+                onChangeText={setNomeCompleto}
                 autoCapitalize="words"
               />
             </View>
 
-            {/* Campo Email */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
               <TextInput
@@ -203,7 +256,6 @@ export default function Cadastro() {
               />
             </View>
 
-            {/* Campo CPF */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>CPF</Text>
               <TextInput
@@ -217,7 +269,6 @@ export default function Cadastro() {
               />
             </View>
 
-            {/* Campo Data de Nascimento */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Data de nascimento</Text>
               <TextInput
@@ -231,7 +282,6 @@ export default function Cadastro() {
               />
             </View>
 
-            {/* Campo Senha */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Senha</Text>
               <View style={styles.passwordContainer}>
@@ -255,7 +305,6 @@ export default function Cadastro() {
               </View>
             </View>
 
-            {/* Campo Confirmar Senha */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Confirmar senha</Text>
               <View style={styles.passwordContainer}>
@@ -280,31 +329,8 @@ export default function Cadastro() {
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Separador */}
-            <View style={styles.dividerContainer}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>ou</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Botão Google */}
-            <TouchableOpacity
-              style={[
-                styles.googleButton,
-                carregandoGoogle && styles.buttonDisabled,
-              ]}
-              onPress={handleGoogleSignup}
-              disabled={carregandoGoogle}
-            >
-              <Text style={styles.googleIcon}>G</Text>
-              <Text style={styles.googleButtonText}>
-                {carregandoGoogle ? "Entrando..." : "Continuar com Google"}
-              </Text>
-            </TouchableOpacity>
           </View>
 
-          {/* Botão Cadastrar */}
           <TouchableOpacity
             style={[styles.signupButton, carregando && styles.buttonDisabled]}
             onPress={handleCadastro}
@@ -315,14 +341,6 @@ export default function Cadastro() {
             </Text>
           </TouchableOpacity>
 
-          {/* Termos */}
-          <Text style={styles.terms}>
-            Ao cadastrar, você concorda com nossos{" "}
-            <Text style={styles.termsLink}>Termos de Uso</Text> e{" "}
-            <Text style={styles.termsLink}>Política de Privacidade</Text>
-          </Text>
-
-          {/* Link para Login */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Já tem uma conta? </Text>
             <Link href="/login" asChild>
@@ -338,50 +356,25 @@ export default function Cadastro() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#EDEAE0",
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: "#EDEAE0" },
+  keyboardView: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
     paddingVertical: 40,
     paddingHorizontal: 24,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  logo: {
-    width: 200,
-    height: 60,
-    marginBottom: 24,
-  },
+  header: { alignItems: "center", marginBottom: 40 },
   title: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#584128",
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-  },
-  form: {
-    width: "100%",
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#333",
-    marginBottom: 8,
-  },
+  subtitle: { fontSize: 16, color: "#666" },
+  form: { width: "100%" },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 16, fontWeight: "500", color: "#333", marginBottom: 8 },
   input: {
     backgroundColor: "#FFF",
     borderWidth: 1,
@@ -392,100 +385,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
   },
+  selectorContainer: { flexDirection: "row", gap: 12, marginTop: 4 },
+  selectorButton: {
+    flex: 1,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  selectorButtonActive: { backgroundColor: "#584128", borderColor: "#584128" },
+  selectorButtonText: { fontSize: 15, fontWeight: "600", color: "#666" },
+  selectorButtonTextActive: { color: "#FFF" },
   passwordContainer: {
     position: "relative",
     flexDirection: "row",
     alignItems: "center",
   },
-  passwordInput: {
-    flex: 1,
-    paddingRight: 50,
-  },
-  eyeButton: {
-    position: "absolute",
-    right: 16,
-    padding: 8,
-  },
-  eyeIcon: {
-    fontSize: 20,
-  },
-  terms: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    marginVertical: 16,
-    lineHeight: 20,
-  },
-  termsLink: {
-    color: "#C5A87B",
-    fontWeight: "600",
-  },
+  passwordInput: { flex: 1, paddingRight: 50 },
+  eyeButton: { position: "absolute", right: 16, padding: 8 },
+  eyeIcon: { fontSize: 20 },
   signupButton: {
     backgroundColor: "#584128",
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
+    marginTop: 20,
     marginBottom: 16,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  signupButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#DDD",
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: "#999",
-  },
-  googleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    borderColor: "#DDD",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 20,
-  },
-  googleIcon: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#DB4437",
-  },
-  googleButtonText: {
-    fontSize: 16,
-    color: "#333",
-    fontWeight: "500",
-  },
+  buttonDisabled: { opacity: 0.6 },
+  signupButtonText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 32,
+    marginTop: 20,
   },
-  footerText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  footerLink: {
-    fontSize: 16,
-    color: "#C5A87B",
-    fontWeight: "600",
-  },
+  footerText: { fontSize: 16, color: "#666" },
+  footerLink: { fontSize: 16, color: "#C5A87B", fontWeight: "600" },
 });

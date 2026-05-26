@@ -1,23 +1,23 @@
+import { Link, router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
+  Alert,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { Link, router } from "expo-router";
+
+import { userService } from "../../services/userService";
 
 const { width } = Dimensions.get("window");
-const logoImage = require("../../assets/images/logo.png");
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -25,7 +25,7 @@ export default function Login() {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !senha) {
       Alert.alert("Atenção", "Preencha todos os campos!");
       return;
@@ -33,12 +33,34 @@ export default function Login() {
 
     setCarregando(true);
 
-    setTimeout(() => {
+    try {
+      const dadosLogin = {
+        email: email.toLowerCase().trim(),
+        senha: senha,
+      };
+
+      // Dispara a requisição para o NestJS através do userService
+      const resposta = await userService.login(dadosLogin);
+      console.log("Login bem-sucedido:", resposta);
+
+      // Redireciona na hora para a página de perfil para evitar travamentos na Web
+      router.replace("/perfil");
+    } catch (error: any) {
+      console.error("Erro capturado no Login:", error);
+
+      const dadosErro = error.response?.data;
+      const mensagemErro =
+        dadosErro?.message ||
+        error.message ||
+        "Erro de conexão com o servidor.";
+
+      Alert.alert(
+        "Erro no Acesso",
+        Array.isArray(mensagemErro) ? mensagemErro[0] : mensagemErro,
+      );
+    } finally {
       setCarregando(false);
-      Alert.alert("Sucesso", "Login realizado com sucesso!", [
-        { text: "OK", onPress: () => router.replace("/index") },
-      ]);
-    }, 1500);
+    }
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -56,9 +78,8 @@ export default function Login() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo e Título */}
+          {/* Cabeçalho */}
           <View style={styles.header}>
-          
             <Text style={styles.title}>Bem-vindo de volta!</Text>
             <Text style={styles.subtitle}>Faça login para continuar</Text>
           </View>
@@ -154,50 +175,25 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#EDEAE0",
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: "#EDEAE0" },
+  keyboardView: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
     paddingVertical: 40,
     paddingHorizontal: 24,
   },
-  header: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  logo: {
-    width: 200,
-    height: 60,
-    marginBottom: 24,
-  },
+  header: { alignItems: "center", marginBottom: 40 },
   title: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#584128",
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-  },
-  form: {
-    width: "100%",
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#333",
-    marginBottom: 8,
-  },
+  subtitle: { fontSize: 16, color: "#666" },
+  form: { width: "100%" },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 16, fontWeight: "500", color: "#333", marginBottom: 8 },
   input: {
     backgroundColor: "#FFF",
     borderWidth: 1,
@@ -213,27 +209,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  passwordInput: {
-    flex: 1,
-    paddingRight: 50,
-  },
-  eyeButton: {
-    position: "absolute",
-    right: 16,
-    padding: 8,
-  },
-  eyeIcon: {
-    fontSize: 20,
-  },
-  forgotContainer: {
-    alignSelf: "flex-end",
-    marginBottom: 24,
-  },
-  forgotText: {
-    fontSize: 14,
-    color: "#C5A87B",
-    fontWeight: "600",
-  },
+  passwordInput: { flex: 1, paddingRight: 50 },
+  eyeButton: { position: "absolute", right: 16, padding: 8 },
+  eyeIcon: { fontSize: 20 },
+  forgotContainer: { alignSelf: "flex-end", marginBottom: 24 },
+  forgotText: { fontSize: 14, color: "#C5A87B", fontWeight: "600" },
   loginButton: {
     backgroundColor: "#584128",
     paddingVertical: 14,
@@ -241,34 +221,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 24,
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  buttonDisabled: { opacity: 0.6 },
+  loginButtonText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   dividerContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 24,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#DDD",
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: "#999",
-  },
-  socialContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#DDD" },
+  dividerText: { marginHorizontal: 16, fontSize: 14, color: "#999" },
+  socialContainer: { flexDirection: "row", justifyContent: "center", gap: 16 },
   socialButton: {
     width: 55,
     height: 55,
@@ -276,24 +238,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  socialButtonText: {
-    fontSize: 24,
-    color: "#FFF",
-    fontWeight: "600",
-  },
+  socialButtonText: { fontSize: 24, color: "#FFF", fontWeight: "600" },
   footer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginTop: 32,
   },
-  footerText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  footerLink: {
-    fontSize: 16,
-    color: "#C5A87B",
-    fontWeight: "600",
-  },
+  footerText: { fontSize: 16, color: "#666" },
+  footerLink: { fontSize: 16, color: "#C5A87B", fontWeight: "600" },
 });

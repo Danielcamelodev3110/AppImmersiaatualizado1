@@ -1,71 +1,74 @@
 import { Feather } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import * as DropdownMenu from "zeego/dropdown-menu";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  Modal,
+  TouchableOpacity,
+} from "react-native";
+import { useState } from "react";
 
 function ProdutosMenuTrigger() {
   const router = useRouter();
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const menuItems = [
+    { id: "experiencias", title: "Experiências", icon: "compass" },
+    { id: "pacotes", title: "Pacotes", icon: "briefcase" },
+    { id: "hospedagens", title: "Hospedagens", icon: "home" },
+  ];
 
   const navigateTo = (route: string) => {
+    setModalVisible(false);
     router.push(`/${route}`);
   };
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        <Pressable style={styles.menuButton}>
-          <Feather name="grid" size={24} color="#ffffff" />
-          <Text style={styles.menuText}>Produtos</Text>
-        </Pressable>
-      </DropdownMenu.Trigger>
-
-      <DropdownMenu.Content
-        style={styles.dropdownContent}
-        align="center"
-        side="top"
+    <>
+      <Pressable
+        style={styles.menuButton}
+        onPress={() => setModalVisible(true)}
       >
-        <View style={styles.dropdownLabel}>
-          <Text style={styles.labelText}>Categorias</Text>
-        </View>
+        <Feather name="grid" size={24} color="#ffffff" />
+        <Text style={styles.menuText}>Produtos</Text>
+      </Pressable>
 
-        <DropdownMenu.Item
-          key="experiencias"
-          onSelect={() => navigateTo("experiencias")}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setModalVisible(false)}
         >
-          <View style={styles.dropdownItem}>
-            <Feather name="star" size={18} color="#FFD700" />
-            <DropdownMenu.ItemTitle style={styles.itemTitle}>
-              Experiências
-            </DropdownMenu.ItemTitle>
-          </View>
-        </DropdownMenu.Item>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Categorias</Text>
+            </View>
 
-        <DropdownMenu.Item key="pacotes" onSelect={() => navigateTo("pacotes")}>
-          <View style={styles.dropdownItem}>
-            <Feather name="package" size={18} color="#FFD700" />
-            <DropdownMenu.ItemTitle style={styles.itemTitle}>
-              Pacotes
-            </DropdownMenu.ItemTitle>
+            {menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.modalItem}
+                onPress={() => navigateTo(item.id)}
+              >
+                <Feather name={item.icon as any} size={24} color="#fded8f" />
+                <Text style={styles.modalItemText}>{item.title}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </DropdownMenu.Item>
-
-        <DropdownMenu.Item
-          key="hospedagens"
-          onSelect={() => navigateTo("hospedagens")}
-        >
-          <View style={styles.dropdownItem}>
-            <Feather name="home" size={18} color="#FFD700" />
-            <DropdownMenu.ItemTitle style={styles.itemTitle}>
-              Hospedagens
-            </DropdownMenu.ItemTitle>
-          </View>
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
+        </TouchableOpacity>
+      </Modal>
+    </>
   );
 }
 
-function CustomTabBarButton(props) {
+function CustomTabBarButton(props: any) {
   return (
     <View style={styles.tabItemContainer}>
       <ProdutosMenuTrigger />
@@ -96,9 +99,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen name="experiencias" options={{ href: null }} />
-
       <Tabs.Screen name="pacotes" options={{ href: null }} />
-
       <Tabs.Screen name="hospedagens" options={{ href: null }} />
 
       <Tabs.Screen
@@ -118,16 +119,16 @@ export default function TabLayout() {
           ),
         }}
       />
-        <Tabs.Screen
-  name="cupons"
-  options={{
-    title: "Cupons",
-    tabBarIcon: ({ color, size }) => (
-      <Feather name="tag" size={size} color={color} />
-    ),
-    headerShown: false,
-  }}
-/>
+      <Tabs.Screen
+        name="cupons"
+        options={{
+          title: "Cupons",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="tag" size={size} color={color} />
+          ),
+          headerShown: false,
+        }}
+      />
       <Tabs.Screen
         name="blog"
         options={{
@@ -157,42 +158,34 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     backgroundColor: "#584128",
     borderTopWidth: 0,
-    borderTopColor: 'transparent',
+    borderTopColor: "transparent",
     elevation: 0,
     shadowOpacity: 0,
   },
-
-  // ✅ Estilo padronizado para TODOS os botões da tab bar
   tabBarItem: {
     backgroundColor: "transparent",
     paddingVertical: 0,
     paddingHorizontal: 8,
-    height: '100%',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: "100%",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 0,
     marginHorizontal: 2,
   },
-
-  // ✅ Estilo do texto abaixo do ícone
   tabBarLabel: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: "500",
     letterSpacing: 0.3,
     marginTop: 2,
   },
-
-  // Container do botão Produtos
   tabItemContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    height: '100%',
-    width: '100%',
+    height: "100%",
+    width: "100%",
   },
-
-  // Botão Produtos - Estilizado para ficar igual aos outros
   menuButton: {
     alignItems: "center",
     justifyContent: "center",
@@ -203,11 +196,10 @@ const styles = StyleSheet.create({
     gap: 0,
     borderWidth: 0,
     overflow: "hidden",
-    height: '100%',
-    width: '100%',
-    flexDirection: 'column',
+    height: "100%",
+    width: "100%",
+    flexDirection: "column",
   },
-
   menuText: {
     fontSize: 11,
     color: "#ffffff",
@@ -215,12 +207,19 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     letterSpacing: 0.3,
   },
-
-  dropdownContent: {
+  // Estilos do Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
     backgroundColor: "#584128",
     borderRadius: 16,
+    width: "80%",
+    maxWidth: 300,
     paddingVertical: 8,
-    paddingHorizontal: 4,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -229,39 +228,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
-    minWidth: 200,
   },
-
-  dropdownLabel: {
+  modalHeader: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.15)",
-    marginBottom: 4,
   },
-
-  labelText: {
-    fontSize: 14,
+  modalTitle: {
+    fontSize: 16,
     fontWeight: "600",
-    color: "#fadb2b",
+    color: "#fded8f",
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    textAlign: "center",
   },
-
-  dropdownItem: {
+  modalItem: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
   },
-
-  itemTitle: {
-    fontSize: 14,
+  modalItemText: {
+    fontSize: 16,
     fontWeight: "500",
     color: "#ffffff",
-    marginLeft: 8,
     letterSpacing: 0.3,
   },
 });

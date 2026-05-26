@@ -1,263 +1,274 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import { useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { userService } from "../../../services/userService";
 
 export default function PerfilScreen() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // Simulando usuário logado
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Dados do usuário (simulados)
-  const userData = {
-    nome: "João Silva",
-    email: "joao.silva@email.com",
-    telefone: "(11) 99999-9999",
-    cpf: "123.456.789-00",
-    dataNascimento: "15/05/1990",
-    membroDesde: "Janeiro 2024",
+  useEffect(() => {
+    async function carregarPerfil() {
+      try {
+        const sessao = await userService.getSavedSession();
+        console.log("Sessão carregada no Perfil:", sessao);
+
+        if (!sessao) {
+          router.replace("/login");
+        } else {
+          setUser(sessao);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar sessão:", error);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    }
+    carregarPerfil();
+  }, []);
+
+  const handleLogout = async () => {
+    await userService.logout();
+    router.replace("/login");
   };
 
-  const menuItems = [
-    { icon: "heart-outline", title: "Meus Favoritos", route: "/favoritos", color: "#FF6B6B" },
-    { icon: "calendar-outline", title: "Minhas Reservas", route: "/reservas", color: "#4ECDC4" },
-    { icon: "card-outline", title: "Formas de Pagamento", route: "/pagamento", color: "#45B7D1" },
-    { icon: "location-outline", title: "Endereços", route: "/enderecos", color: "#96CEB4" },
-    { icon: "chatbubble-outline", title: "Suporte", route: "/contato", color: "#FFEAA7" },
-    { icon: "document-text-outline", title: "Termos e Privacidade", route: "/termos", color: "#DDA0DD" },
+  // Garante a leitura correta vinda da propriedade do banco de dados (Prisma)
+  const userType = user?.tipo_usuario || "cliente";
+
+  const baseMenuItems = [
+    {
+      icon: "chatbubble-outline",
+      title: "Suporte",
+      route: "/contato",
+      color: "#C5A87B",
+    },
+    {
+      icon: "document-text-outline",
+      title: "Termos e Privacidade",
+      route: "/termos",
+      color: "#999999",
+    },
   ];
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Sair da Conta",
-      "Tem certeza que deseja sair?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Sair", 
-          onPress: () => {
-            setIsLoggedIn(false);
-            router.replace("/login");
-          },
-          style: "destructive"
-        }
-      ]
-    );
+  const clienteMenuItems = [
+    {
+      icon: "heart-outline",
+      title: "Meus Favoritos",
+      route: "/favoritos",
+      color: "#FF6B6B",
+    },
+    {
+      icon: "calendar-outline",
+      title: "Minhas Reservas",
+      route: "/reservas",
+      color: "#4ECDC4",
+    },
+  ];
+
+  const anfitriaoMenuItems = [
+    {
+      icon: "add-circle-outline",
+      title: "Cadastrar Produto",
+      route: "/cadastrar-produto",
+      color: "#45B7D1",
+      description: "Adicione um novo produto",
+    },
+    {
+      icon: "home-outline",
+      title: "Minhas Hospedagens",
+      route: "/minhas-hospedagens",
+      color: "#4ECDC4",
+    },
+    {
+      icon: "stats-chart-outline",
+      title: "Meus Ganhos",
+      route: "/ganhos",
+      color: "#96CEB4",
+    },
+  ];
+
+  const adminMenuItems = [
+    {
+      icon: "people-outline",
+      title: "Gerenciar Usuários",
+      route: "../usuarios",
+      color: "#FF6B6B",
+    },
+    {
+      icon: "stats-chart-outline",
+      title: "Relatórios Gerais",
+      route: "/admin/relatorios",
+      color: "#584128",
+    },
+  ];
+
+  const getMenuItems = () => {
+    if (userType === "anfitriao")
+      return [...anfitriaoMenuItems, ...baseMenuItems];
+    if (userType === "admin" || userType === "administrador")
+      return [...adminMenuItems, ...baseMenuItems];
+    return [...clienteMenuItems, ...baseMenuItems];
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#584128" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Header */}
+      {/* Cabeçalho */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="#584128" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Meu Perfil</Text>
-        <TouchableOpacity onPress={() => router.push("/editar-perfil")} style={styles.editButton}>
-          <Feather name="edit-2" size={20} color="#584128" />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Informações do Usuário */}
+      {/* Cartão do Perfil do Usuário */}
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{userData.nome.charAt(0)}</Text>
-          </View>
-          <TouchableOpacity style={styles.changePhotoButton}>
-            <Feather name="camera" size={16} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={styles.userName}>{userData.nome}</Text>
-        <Text style={styles.userEmail}>{userData.email}</Text>
-        
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Reservas</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>8</Text>
-            <Text style={styles.statLabel}>Favoritos</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>3</Text>
-            <Text style={styles.statLabel}>Avaliações</Text>
+            <Text style={styles.avatarText}>
+              {(user?.nome_completo || user?.email || "U")
+                .charAt(0)
+                .toUpperCase()}
+            </Text>
           </View>
         </View>
+
+        <Text style={styles.userName}>
+          {user?.nome_completo || "Usuário Immersia"}
+        </Text>
+
+        <View
+          style={[
+            styles.userBadge,
+            {
+              backgroundColor:
+                userType === "anfitriao" ? "#FF6B6B20" : "#4ECDC420",
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.userBadgeText,
+              { color: userType === "anfitriao" ? "#FF6B6B" : "#4ECDC4" },
+            ]}
+          >
+            {userType.toUpperCase()}
+          </Text>
+        </View>
+
+        <Text style={styles.userEmail}>{user?.email}</Text>
       </View>
 
-      {/* Informações Pessoais */}
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>Informações Pessoais</Text>
-        
-        <View style={styles.infoItem}>
-          <Ionicons name="call-outline" size={20} color="#584128" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Telefone</Text>
-            <Text style={styles.infoValue}>{userData.telefone}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="calendar-outline" size={20} color="#584128" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Data de Nascimento</Text>
-            <Text style={styles.infoValue}>{userData.dataNascimento}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="time-outline" size={20} color="#584128" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Membro desde</Text>
-            <Text style={styles.infoValue}>{userData.membroDesde}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Menu de Opções */}
+      {/* Seção Dinâmica de Menu */}
       <View style={styles.menuSection}>
         <Text style={styles.sectionTitle}>Opções</Text>
-        
-        {menuItems.map((item, index) => (
+        {getMenuItems().map((item, index) => (
           <TouchableOpacity
             key={index}
             style={styles.menuItem}
-            onPress={() => router.push(item.route)}
+            onPress={() => router.push(item.route as any)}
           >
-            <View style={[styles.menuIcon, { backgroundColor: item.color + '20' }]}>
-              <Ionicons name={item.icon} size={22} color={item.color} />
+            <View
+              style={[styles.menuIcon, { backgroundColor: item.color + "20" }]}
+            >
+              <Ionicons name={item.icon as any} size={22} color={item.color} />
             </View>
-            <Text style={styles.menuTitle}>{item.title}</Text>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              {item.description && (
+                <Text style={styles.menuDescription}>{item.description}</Text>
+              )}
+            </View>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Botão Sair */}
+      {/* Botão de Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
         <Text style={styles.logoutText}>Sair da conta</Text>
       </TouchableOpacity>
-
-      {/* Versão do App */}
-      <Text style={styles.versionText}>Versão 1.0.0</Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1, backgroundColor: "#EDEAE0" },
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#EDEAE0',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#EDEAE0",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 15,
     paddingBottom: 15,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: "#e0e0e0",
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#584128',
-  },
-  editButton: {
-    padding: 8,
-  },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#584128" },
   profileCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     margin: 16,
     padding: 20,
     borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    alignItems: "center",
     elevation: 2,
   },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
+  avatarContainer: { position: "relative", marginBottom: 16 },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#584128',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#584128",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  avatarText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  changePhotoButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#584128',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-  },
+  avatarText: { fontSize: 40, fontWeight: "bold", color: "#ffffff" },
   userName: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
     marginBottom: 4,
   },
-  userEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    width: '100%',
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#584128',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
+  userEmail: { fontSize: 14, color: "#666", marginTop: 8 },
+  userBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
     marginTop: 4,
   },
-  statDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: '#e0e0e0',
-  },
-  infoSection: {
-    backgroundColor: '#ffffff',
+  userBadgeText: { fontSize: 12, fontWeight: "bold" },
+  menuSection: {
+    backgroundColor: "#ffffff",
     margin: 16,
     marginTop: 0,
     padding: 20,
@@ -265,77 +276,38 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
     marginBottom: 16,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  infoContent: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  menuSection: {
-    backgroundColor: '#ffffff',
-    margin: 16,
-    marginTop: 0,
-    padding: 20,
-    borderRadius: 16,
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   menuIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
   },
-  menuTitle: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
+  menuContent: { flex: 1 },
+  menuTitle: { fontSize: 16, color: "#333", fontWeight: "500" },
+  menuDescription: { fontSize: 12, color: "#999", marginTop: 2 },
   logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#ffffff",
     margin: 16,
     marginTop: 0,
     padding: 16,
     borderRadius: 16,
     gap: 10,
   },
-  logoutText: {
-    fontSize: 16,
-    color: '#FF3B30',
-    fontWeight: '600',
-  },
-  versionText: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 30,
-    marginTop: 10,
-  },
+  logoutText: { fontSize: 16, color: "#FF3B30", fontWeight: "600" },
 });

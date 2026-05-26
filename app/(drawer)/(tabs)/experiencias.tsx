@@ -1,13 +1,15 @@
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
   Modal,
+  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,165 +19,125 @@ import {
 
 interface Experiencia {
   id: number;
-  titulo: string;
-  preco: string;
-  duracao: string;
-  localizacao: string;
-  imagem: any;
+  nome: string;
+  preco: number;
   descricao?: string;
-  slug: string; // ✅ Adicionar este campo
+  categoria: string;
+  quantidade_estoque: number;
+  status: string;
+  tipo_produto: string;
+  imagem_url: string[];
+  id_cliente_produto: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
-const experiencias: Experiencia[] = [
-  {
-    id: 1,
-    titulo: "Passeio de Balão - Campos do Jordão (SP)",
-    preco: "R$ 900,00",
-    duracao: "1h/1h30",
-    localizacao: "Campos do Jordão, SP",
-    imagem: require("../../../assets/images/balonismo.webp"),
-    slug: "../../exemploproduto", // ✅ Adicionar slug
-  },
-  {
-    id: 2,
-    titulo: "Experiência Gastronômica Restaurante - São Paulo (SP)",
-    preco: "R$ 500,00",
-    duracao: "2h/3h",
-    localizacao: "São Paulo, SP",
-    imagem: require("../../../assets/images/chef.webp"),
-    slug: "", 
-  },
-  {
-    id: 3,
-    titulo: "Mergulho com Arraias em Fernando de Noronha (PE)",
-    preco: "R$ 450,00",
-    duracao: "2h",
-    localizacao: "Fernando de Noronha, PE",
-    imagem: require("../../../assets/images/beautiful-creatures-thanks.jpg"),
-    slug: "", 
-  },
-  {
-    id: 4,
-    titulo: "Caminhada e Yoga na Serra - Serra do Cipó (MG)",
-    preco: "R$ 250,00",
-    duracao: "4h",
-    localizacao: "Serra do Cipó, MG",
-    imagem: require("../../../assets/images/reeducacao-postural-scaled.webp"),
-    slug: "", 
-  },
-  {
-    id: 5,
-    titulo: "Visita a uma Fazenda de Café - Monte Verde (MG)",
-    preco: "R$ 200,00",
-    duracao: "3h",
-    localizacao: "Monte Verde, MG",
-    imagem: require("../../../assets/images/1653486471302.jpeg"),
-  slug: "", 
-  },
-  {
-    id: 6,
-    titulo: "Voo de Helicóptero Sobre o Cristo Redentor (RJ)",
-    preco: "R$ 800,00",
-    duracao: "15/20min",
-    localizacao: "Rio de Janeiro, RJ",
-    imagem: require("../../../assets/images/RIO-NAS-ALTURAS-3_A.png"),
-    slug: "", 
-  },
-  {
-    id: 7,
-    titulo: "Passeio de Trem para as Montanhas - Petrópolis (RJ)",
-    preco: "R$ 150,00",
-    duracao: "4h",
-    localizacao: "Petrópolis, RJ",
-    imagem: require("../../../assets/images/1920x1080-Serra-1-540x540.jpg"),
-    slug: "", 
-  },
-  {
-    id: 8,
-    titulo: "Safari Fotográfico em Pantanal - Cuiabá (MT)",
-    preco: "R$ 600,00",
-    duracao: "6h",
-    localizacao: "Cuiabá, MT",
-    imagem: require("../../../assets/images/images.jpg"),
-    slug: "", 
-  },
-  {
-    id: 9,
-    titulo: "Tour Catedral Metropolitana - Brasília (DF)",
-    preco: "R$ 150,00",
-    duracao: "2h",
-    localizacao: "Brasília, DF",
-    imagem: require("../../../assets/images/DSC_8258.jpg"),
-    slug: "", 
-  },
-  {
-    id: 10,
-    titulo: "Oficina de Cerâmica no Vale do Jequitinhonha (MG)",
-    preco: "R$ 250,00",
-    duracao: "3h",
-    localizacao: "Joviania, MG",
-    imagem: require("../../../assets/images/images (1).jpg"),
-    slug: "", 
-  },
-  {
-    id: 11,
-    titulo: "Pular de Bungee Jump - Bento Gonçalves (RS)",
-    preco: "R$ 169,00",
-    duracao: "10/15min",
-    localizacao: "Bento Gonçalves, RS",
-    imagem: require("../../../assets/images/parque-gasper-aventuras-bento-goncalves-img-7-620x580.jpg"),
-    slug: "", 
-  },
-  {
-    id: 12,
-    titulo: "Aventura de Rafting no Rio Itajaí-Açu - Blumenau (SC)",
-    preco: "R$ 200,00",
-    duracao: "3h",
-    localizacao: "Blumenau, SC",
-    imagem: require("../../../assets/images/Tudo_o_que_voce_Precisa_Saber_Antes_de_se_Aventurar_no_Rafting_na_Chapada_01.png"),
-    slug: "", 
-  },
-  {
-    id: 13,
-    titulo: "Passeio de Caiaque ao Pôr do Sol – Florianópolis (SC)",
-    preco: "R$ 180,00",
-    duracao: "2h",
-    localizacao: "Florianópolis, SC",
-    imagem: require("../../../assets/images/passeio_caiaque.webp"),
-    slug: "", 
-  },
-  {
-    id: 14,
-    titulo: "Trilha e Cachoeira na Mata Atlântica – Ubatuba (SP)",
-    preco: "R$ 350,00",
-    duracao: "4h",
-    localizacao: "Ubatuba, SP",
-    imagem: require("../../../assets/images/cachoeira_em_ubatuba.jpg"),
-    slug: "", 
-  },
-  {
-    id: 15,
-    titulo: "Aula de Surf para Iniciantes – Praia de Pipa (RN)",
-    preco: "R$ 280,00",
-    duracao: "3h",
-    localizacao: "Praia de Pipa, RN",
-    imagem: require("../../../assets/images/aula_surf.jpg"),
-    slug: "", 
-  },
-];
+// Função para normalizar imagens
+const normalizarImagens = (imagemUrl: any): string[] => {
+  if (!imagemUrl) return [];
+
+  if (Array.isArray(imagemUrl)) {
+    return imagemUrl.filter(
+      (url) => url && typeof url === "string" && url.trim() !== "",
+    );
+  }
+
+  if (typeof imagemUrl === "string") {
+    try {
+      const parsed = JSON.parse(imagemUrl);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((url) => url && url.trim() !== "");
+      }
+    } catch (e) {}
+
+    if (imagemUrl.includes(",")) {
+      return imagemUrl.split(",").map((url: string) => url.trim());
+    }
+
+    if (imagemUrl.trim()) {
+      return [imagemUrl.trim()];
+    }
+  }
+
+  return [];
+};
 
 export default function ExperienciasScreen() {
   const router = useRouter();
   const [favoritos, setFavoritos] = useState<number[]>([]);
+  const [carrinho, setCarrinho] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [modalLoginVisible, setModalLoginVisible] = useState(false);
+  const [modalDetalhesVisible, setModalDetalhesVisible] = useState(false);
+  const [produtoSelecionado, setProdutoSelecionado] =
+    useState<Experiencia | null>(null);
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [experiencias, setExperiencias] = useState<Experiencia[]>([]);
+  const [carregandoAPI, setCarregandoAPI] = useState(false);
+  const [quantidadeSelecionada, setQuantidadeSelecionada] = useState(1);
+  const [acaoLogin, setAcaoLogin] = useState<"favorito" | "carrinho">(
+    "favorito",
+  );
+
   const itensPorPagina = 6;
 
-  useEffect(() => {
-    carregarFavoritos();
-  }, []);
+  const carregarCarrinho = async () => {
+    try {
+      const userId = await AsyncStorage.getItem("userId");
+      if (userId) {
+        const carrinhoSalvo = await AsyncStorage.getItem(`carrinho_${userId}`);
+        if (carrinhoSalvo) setCarrinho(JSON.parse(carrinhoSalvo));
+      }
+    } catch (error) {
+      console.error("Erro ao carregar carrinho:", error);
+    }
+  };
+
+  const salvarCarrinho = async (novoCarrinho: any[]) => {
+    try {
+      const userId = await AsyncStorage.getItem("userId");
+      if (userId) {
+        await AsyncStorage.setItem(
+          `carrinho_${userId}`,
+          JSON.stringify(novoCarrinho),
+        );
+        setCarrinho(novoCarrinho);
+      }
+    } catch (error) {
+      console.error("Erro ao salvar carrinho:", error);
+    }
+  };
+
+  const buscarExperiencias = async () => {
+    try {
+      setCarregandoAPI(true);
+      const response = await fetch("http://localhost:3000/produtos", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) throw new Error("Erro ao buscar experiências");
+
+      const data = await response.json();
+      const experienciasFiltradas = data
+        .filter((produto: any) => produto.tipo_produto === "experiencia")
+        .map((produto: any) => ({
+          ...produto,
+          imagem_url: normalizarImagens(produto.imagem_url),
+        }));
+
+      setExperiencias(experienciasFiltradas);
+    } catch (error) {
+      console.error("Erro ao buscar experiências:", error);
+      Alert.alert("Erro", "Não foi possível carregar as experiências");
+    } finally {
+      setCarregandoAPI(false);
+      setCarregando(false);
+      setRefreshing(false);
+    }
+  };
 
   const carregarFavoritos = async () => {
     try {
@@ -184,20 +146,32 @@ export default function ExperienciasScreen() {
         const favoritosSalvos = await AsyncStorage.getItem(
           `favoritos_experiencias_${userId}`,
         );
-        if (favoritosSalvos) {
-          setFavoritos(JSON.parse(favoritosSalvos));
-        }
+        if (favoritosSalvos) setFavoritos(JSON.parse(favoritosSalvos));
       }
     } catch (error) {
       console.error("Erro ao carregar favoritos:", error);
-    } finally {
-      setCarregando(false);
     }
   };
 
-  const verificarLogin = async (): Promise<boolean> => {
-    const userToken = await AsyncStorage.getItem("userToken");
+  useFocusEffect(
+    useCallback(() => {
+      buscarExperiencias();
+      carregarFavoritos();
+      carregarCarrinho();
+    }, []),
+  );
+
+  useEffect(() => {
+    carregarFavoritos();
+    carregarCarrinho();
+  }, []);
+
+  const verificarLogin = async (
+    acao: "favorito" | "carrinho" = "favorito",
+  ): Promise<boolean> => {
+    const userToken = await AsyncStorage.getItem("@Immersia:token");
     if (!userToken) {
+      setAcaoLogin(acao);
       setModalLoginVisible(true);
       return false;
     }
@@ -205,7 +179,7 @@ export default function ExperienciasScreen() {
   };
 
   const adicionarFavorito = async (id: number) => {
-    const isLoggedIn = await verificarLogin();
+    const isLoggedIn = await verificarLogin("favorito");
     if (!isLoggedIn) return;
 
     try {
@@ -241,17 +215,85 @@ export default function ExperienciasScreen() {
     }
   };
 
+  const adicionarAoCarrinho = async () => {
+    const isLoggedIn = await verificarLogin("carrinho");
+    if (!isLoggedIn) return;
+    if (!produtoSelecionado) return;
+
+    if (quantidadeSelecionada > produtoSelecionado.quantidade_estoque) {
+      Alert.alert("Erro", "Quantidade indisponível em estoque");
+      return;
+    }
+
+    const itemExistente = carrinho.find(
+      (item) => item.id === produtoSelecionado.id,
+    );
+    let novoCarrinho;
+
+    if (itemExistente) {
+      novoCarrinho = carrinho.map((item) =>
+        item.id === produtoSelecionado.id
+          ? { ...item, quantidade: item.quantidade + quantidadeSelecionada }
+          : item,
+      );
+    } else {
+      novoCarrinho = [
+        ...carrinho,
+        {
+          id: produtoSelecionado.id,
+          nome: produtoSelecionado.nome,
+          preco: produtoSelecionado.preco,
+          quantidade: quantidadeSelecionada,
+          imagem: produtoSelecionado.imagem_url?.[0] || null,
+          tipo: "experiencia",
+        },
+      ];
+    }
+
+    await salvarCarrinho(novoCarrinho);
+
+    Alert.alert(
+      "Carrinho",
+      `${quantidadeSelecionada} vaga(s) de "${produtoSelecionado.nome}" adicionada(s)!`,
+      [
+        {
+          text: "Continuar Comprando",
+          onPress: () => setModalDetalhesVisible(false),
+        },
+        {
+          text: "Ver Carrinho",
+          onPress: () => {
+            setModalDetalhesVisible(false);
+            router.push("/carrinho");
+          },
+        },
+      ],
+    );
+  };
+
+  const abrirDetalhes = (item: Experiencia) => {
+    setProdutoSelecionado(item);
+    setQuantidadeSelecionada(1);
+    setModalDetalhesVisible(true);
+  };
+
   const filtrarExperiencias = () => {
     let filtradas = experiencias;
     if (searchQuery) {
       filtradas = filtradas.filter(
         (exp) =>
-          exp.titulo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          exp.localizacao.toLowerCase().includes(searchQuery.toLowerCase()),
+          exp.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          exp.categoria?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          exp.descricao?.toLowerCase().includes(searchQuery.toLowerCase()),
       );
     }
     return filtradas;
   };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    buscarExperiencias();
+  }, []);
 
   const experienciasFiltradas = filtrarExperiencias();
   const totalPaginas = Math.ceil(experienciasFiltradas.length / itensPorPagina);
@@ -260,31 +302,57 @@ export default function ExperienciasScreen() {
     paginaAtual * itensPorPagina,
   );
 
-const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
-  const isFavorito = favoritos.includes(item.id);
+  const formatarPreco = (preco: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(preco);
+  };
 
-  return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => router.push(`/experiencia/${item.slug}`)} // ✅ Usar slug
-      activeOpacity={0.9}
-    >
-        <Image source={item.imagem} style={styles.cardImage} />
+  const formatarData = (data?: string) => {
+    if (!data) return "Data não disponível";
+    return new Date(data).toLocaleDateString("pt-BR");
+  };
+
+  const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
+    const isFavorito = favoritos.includes(item.id);
+    const imagemPrincipal =
+      item.imagem_url && item.imagem_url.length > 0
+        ? { uri: item.imagem_url[0] }
+        : require("../../../assets/images/imagem-fundo-immersia.png");
+
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => abrirDetalhes(item)}
+        activeOpacity={0.9}
+      >
+        <Image source={imagemPrincipal} style={styles.cardImage} />
+        {item.imagem_url && item.imagem_url.length > 1 && (
+          <View style={styles.multiImageIndicator}>
+            <Feather name="image" size={12} color="#FFF" />
+            <Text style={styles.multiImageText}>{item.imagem_url.length}</Text>
+          </View>
+        )}
         <View style={styles.cardContent}>
           <View style={styles.cardText}>
             <Text style={styles.cardPrice}>
-              {item.preco} ({item.duracao})
+              {formatarPreco(item.preco)} ({item.quantidade_estoque} dias)
             </Text>
             <Text style={styles.cardTitle} numberOfLines={2}>
-              {item.titulo}
+              {item.nome}
             </Text>
             <View style={styles.locationContainer}>
-              <Feather name="map-pin" size={12} color="#999" />
-              <Text style={styles.locationText}>{item.localizacao}</Text>
+              <Feather name="map-pin" size={12} color="#8B8272" />
+              <Text style={styles.locationText}>
+                {item.categoria || "Brasil"}
+              </Text>
             </View>
           </View>
           <TouchableOpacity
-            style={[styles.favoriteBtn, isFavorito && styles.favoriteBtnActive]}
+            style={styles.favoriteBtn}
             onPress={() =>
               isFavorito ? removerFavorito(item.id) : adicionarFavorito(item.id)
             }
@@ -300,138 +368,221 @@ const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
     );
   };
 
+  const ModalDetalhes = () => {
+    if (!produtoSelecionado) return null;
+
+    const images = produtoSelecionado.imagem_url || [];
+    const hasMultipleImages = images.length > 1;
+    const [localImageIndex, setLocalImageIndex] = useState(0);
+
+    const currentImage =
+      images.length > 0
+        ? { uri: images[localImageIndex] }
+        : require("../../../assets/images/imagem-fundo-immersia.png");
+
+    return (
+      <Modal
+        visible={modalDetalhesVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalDetalhesVisible(false)}
+      >
+        <View style={styles.modalDetalhesOverlay}>
+          <View style={styles.modalDetalhesContainer}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setModalDetalhesVisible(false)}
+            >
+              <Feather name="x" size={24} color="#FFF" />
+            </TouchableOpacity>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.carouselContainer}>
+                <Image
+                  source={currentImage}
+                  style={styles.detalhesImage}
+                  resizeMode="cover"
+                />
+
+                {hasMultipleImages && (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.navButton, styles.navButtonLeft]}
+                      onPress={() =>
+                        setLocalImageIndex(Math.max(0, localImageIndex - 1))
+                      }
+                    >
+                      <Feather name="chevron-left" size={30} color="#FFF" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.navButton, styles.navButtonRight]}
+                      onPress={() =>
+                        setLocalImageIndex(
+                          Math.min(images.length - 1, localImageIndex + 1),
+                        )
+                      }
+                    >
+                      <Feather name="chevron-right" size={30} color="#FFF" />
+                    </TouchableOpacity>
+
+                    <View style={styles.imageCounter}>
+                      <Text style={styles.imageCounterText}>
+                        {localImageIndex + 1} / {images.length}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+
+              {hasMultipleImages && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.thumbnailScroll}
+                >
+                  {images.map((url, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => setLocalImageIndex(index)}
+                    >
+                      <Image
+                        source={{ uri: url }}
+                        style={[
+                          styles.thumbnailImage,
+                          localImageIndex === index &&
+                            styles.thumbnailImageActive,
+                        ]}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={styles.detalhesContent}>
+                <Text style={styles.detalhesTitulo}>
+                  {produtoSelecionado.nome}
+                </Text>
+                <View style={styles.detalhesPrecoContainer}>
+                  <Text style={styles.detalhesPreco}>
+                    {formatarPreco(produtoSelecionado.preco)}
+                  </Text>
+                  <Text style={styles.detalhesEstoque}>
+                    {produtoSelecionado.quantidade_estoque} vagas disponíveis
+                  </Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Feather name="tag" size={18} color="#584128" />
+                  <Text style={styles.infoText}>
+                    Categoria: {produtoSelecionado.categoria || "Experiência"}
+                  </Text>
+                </View>
+
+                {produtoSelecionado.descricao && (
+                  <View style={styles.descricaoContainer}>
+                    <Text style={styles.descricaoTitulo}>Descrição</Text>
+                    <Text style={styles.descricaoTexto}>
+                      {produtoSelecionado.descricao}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.infoRow}>
+                  <Feather name="calendar" size={18} color="#584128" />
+                  <Text style={styles.infoText}>
+                    Criado em: {formatarData(produtoSelecionado.created_at)}
+                  </Text>
+                </View>
+
+                <View style={styles.quantidadeContainer}>
+                  <Text style={styles.quantidadeLabel}>Vagas desejadas:</Text>
+                  <View style={styles.quantidadeSelector}>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setQuantidadeSelecionada(
+                          Math.max(1, quantidadeSelecionada - 1),
+                        )
+                      }
+                      style={styles.quantidadeBtn}
+                    >
+                      <Feather name="minus" size={20} color="#584128" />
+                    </TouchableOpacity>
+                    <Text style={styles.quantidadeValor}>
+                      {quantidadeSelecionada}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        setQuantidadeSelecionada(
+                          Math.min(
+                            produtoSelecionado.quantidade_estoque,
+                            quantidadeSelecionada + 1,
+                          ),
+                        )
+                      }
+                      style={styles.quantidadeBtn}
+                    >
+                      <Feather name="plus" size={20} color="#584128" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.totalContainerModal}>
+                  <Text style={styles.totalLabel}>Total:</Text>
+                  <Text style={styles.totalValor}>
+                    {formatarPreco(
+                      produtoSelecionado.preco * quantidadeSelecionada,
+                    )}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.btnAdicionarCarrinho}
+                  onPress={adicionarAoCarrinho}
+                >
+                  <Feather name="shopping-cart" size={20} color="#FFF" />
+                  <Text style={styles.btnAdicionarText}>
+                    Adicionar ao Carrinho
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const renderPagination = () => {
     if (totalPaginas <= 1) return null;
-
-    const paginas = [];
-    const maxBotoes = 5;
-    let inicio = Math.max(1, paginaAtual - Math.floor(maxBotoes / 2));
-    let fim = Math.min(totalPaginas, inicio + maxBotoes - 1);
-
-    if (fim - inicio + 1 < maxBotoes) {
-      inicio = Math.max(1, fim - maxBotoes + 1);
-    }
-
-    for (let i = inicio; i <= fim; i++) {
-      paginas.push(i);
-    }
-
-    if (inicio > 1) {
-      paginas.unshift(1);
-      if (inicio > 2) paginas.splice(1, 0, -1);
-    }
-
-    if (fim < totalPaginas) {
-      if (fim < totalPaginas - 1) paginas.push(-1);
-      paginas.push(totalPaginas);
-    }
+    const paginas = Array.from({ length: totalPaginas }, (_, i) => i + 1);
 
     return (
       <View style={styles.pagination}>
-        <TouchableOpacity
-          style={[
-            styles.pageButton,
-            paginaAtual === 1 && styles.pageButtonDisabled,
-          ]}
-          onPress={() => setPaginaAtual(paginaAtual - 1)}
-          disabled={paginaAtual === 1}
-        >
-          <Feather
-            name="chevron-left"
-            size={20}
-            color={paginaAtual === 1 ? "#ccc" : "#584128"}
-          />
-        </TouchableOpacity>
-
-        {paginas.map((pag, index) =>
-          pag === -1 ? (
-            <Text key={`dots-${index}`} style={styles.pageDots}>
-              ...
-            </Text>
-          ) : (
-            <TouchableOpacity
-              key={pag}
+        {paginas.map((pag) => (
+          <TouchableOpacity
+            key={pag}
+            style={[
+              styles.pageButton,
+              paginaAtual === pag && styles.pageButtonActive,
+            ]}
+            onPress={() => setPaginaAtual(pag)}
+          >
+            <Text
               style={[
-                styles.pageButton,
-                paginaAtual === pag && styles.pageButtonActive,
+                styles.pageText,
+                paginaAtual === pag && styles.pageTextActive,
               ]}
-              onPress={() => setPaginaAtual(pag)}
             >
-              <Text
-                style={[
-                  styles.pageText,
-                  paginaAtual === pag && styles.pageTextActive,
-                ]}
-              >
-                {pag}
-              </Text>
-            </TouchableOpacity>
-          ),
-        )}
-
-        <TouchableOpacity
-          style={[
-            styles.pageButton,
-            paginaAtual === totalPaginas && styles.pageButtonDisabled,
-          ]}
-          onPress={() => setPaginaAtual(paginaAtual + 1)}
-          disabled={paginaAtual === totalPaginas}
-        >
-          <Feather
-            name="chevron-right"
-            size={20}
-            color={paginaAtual === totalPaginas ? "#ccc" : "#584128"}
-          />
-        </TouchableOpacity>
+              {pag}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
     );
   };
 
-  const ModalLogin = () => (
-    <Modal
-      visible={modalLoginVisible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setModalLoginVisible(false)}
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setModalLoginVisible(false)}
-      >
-        <View style={styles.modalContent}>
-          <View style={styles.modalIcon}>
-            <Feather name="heart" size={40} color="#FF3B30" />
-          </View>
-          <Text style={styles.modalTitle}>Faça login para favoritar</Text>
-          <Text style={styles.modalText}>
-            Você precisa estar logado para salvar experiências nos favoritos.
-          </Text>
-          <View style={styles.modalButtons}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonLogin]}
-              onPress={() => {
-                setModalLoginVisible(false);
-                router.push("/login");
-              }}
-            >
-              <Text style={styles.modalButtonText}>Fazer Login</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonCancel]}
-              onPress={() => setModalLoginVisible(false)}
-            >
-              <Text style={[styles.modalButtonText, { color: "#666" }]}>
-                Cancelar
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-
-  if (carregando) {
+  if (carregando || carregandoAPI) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#584128" />
@@ -441,7 +592,6 @@ const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
 
   return (
     <View style={styles.container}>
-      {/* Banner Hero */}
       <View style={styles.heroContainer}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -458,7 +608,6 @@ const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
         </View>
       </View>
 
-      {/* Barra de Pesquisa */}
       <View style={styles.searchContainer}>
         <Feather
           name="search"
@@ -473,14 +622,8 @@ const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        {searchQuery !== "" && (
-          <TouchableOpacity onPress={() => setSearchQuery("")}>
-            <Feather name="x" size={20} color="#999" />
-          </TouchableOpacity>
-        )}
       </View>
 
-      {/* Lista de Experiências */}
       <FlatList
         data={experienciasPaginadas}
         renderItem={renderExperienciaCard}
@@ -490,209 +633,277 @@ const renderExperienciaCard = ({ item }: { item: Experiencia }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ListFooterComponent={renderPagination()}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Feather name="search" size={50} color="#ccc" />
-            <Text style={styles.emptyText}>Nenhuma experiência encontrada</Text>
-          </View>
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       />
 
-      <ModalLogin />
+      <ModalDetalhes />
+
+      <Modal visible={modalLoginVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Acesso Necessário</Text>
+            <Text style={styles.modalText}>
+              Faça login para continuar com essa ação.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalButtonLogin}
+                onPress={() => {
+                  setModalLoginVisible(false);
+                  router.push("/login");
+                }}
+              >
+                <Text style={styles.modalButtonText}>Fazer Login</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalButtonCancel}
+                onPress={() => setModalLoginVisible(false)}
+              >
+                <Text style={{ color: "#666" }}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#EDEAE0",
-  },
+  container: { flex: 1, backgroundColor: "#EDEAE0" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#EDEAE0",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
+  heroContainer: { height: 120, position: "relative" },
+  heroImage: { width: "100%", height: "100%", resizeMode: "cover" },
+  heroOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 10,
   },
-    backButton: {
-      padding: 8,
-    },
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: "bold",
-      color: "#584128",
-    },
-    heroContainer: {
-      height: 100,
-      position: "relative",
-    },
-    heroImage: {
-      width: "100%",
-      height: "100%",
-      resizeMode: "cover",
-    },
-    heroOverlay: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      padding: 0,
-    },
-    heroTitle: {
-      fontSize: 28,
-      fontWeight: "bold",
-      color: "#ffffff",
-      textAlign: "center",
-    },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#ffffff",
+    textAlign: "center",
+  },
+  backButton: {
+    position: "absolute",
+    top: 40,
+    left: 20,
+    zIndex: 10,
+    backgroundColor: "rgba(255,255,255,0.8)",
+    borderRadius: 20,
+    padding: 8,
+  },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ffffff",
-    marginTop: 45,
-    marginBottom: 30,
+    marginTop: 15,
+    marginBottom: 10,
+    marginHorizontal: 16,
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 25,
     borderWidth: 1,
     borderColor: "#e0e0e0",
   },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: "#333",
-    padding: 0,
-  },
-  listContent: {
-    paddingHorizontal: 12,
-    paddingBottom: 20,
-  },
-  gridRow: {
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: 16, color: "#333" },
+  listContent: { paddingHorizontal: 12, paddingBottom: 20 },
+  gridRow: { justifyContent: "space-between", marginBottom: 16 },
+
+  // Customização CSS baseada na Imagem enviada
   card: {
-    flex: 1,
+    flex: 0.48,
     backgroundColor: "#E4D5BE",
-    marginHorizontal: 4,
+    borderRadius: 0,
     overflow: "hidden",
-    // Sombra preta na direita e embaixo
-    shadowColor: "#000000",
-    shadowOffset: {
-      width: 4, // Sombra para a direita
-      height: 2, // Sombra para baixo
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    // Borda no card
-    borderWidth: 2,
-    borderColor: "#584128",
+    borderWidth: 1.5,
+    borderColor: "#4A3B2C",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   cardImage: {
     width: "100%",
-    height: 200,
+    height: 150,
     resizeMode: "cover",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "#4A3B2C",
   },
-  cardContent: {
+  multiImageIndicator: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     flexDirection: "row",
-    padding: 12,
     alignItems: "center",
+    gap: 4,
   },
-  cardText: {
-    flex: 1,
-  },
+  multiImageText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
+  cardContent: { padding: 12, position: "relative" },
+  cardText: { paddingRight: 28 },
   cardPrice: {
-    fontSize: 12,
-    color: "#584128",
-    fontWeight: "600",
-    marginBottom: 4,
+    fontSize: 13,
+    color: "#4A3B2C",
+    fontWeight: "500",
+    marginBottom: 6,
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 15,
     color: "#000000",
-    marginBottom: 4,
-    lineHeight: 18,
+    fontWeight: "bold",
+    lineHeight: 20,
+    marginBottom: 8,
   },
   locationContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 4,
   },
-  locationText: {
-    fontSize: 11,
-    color: "#999",
-    marginLeft: 4,
-  },
+  locationText: { fontSize: 12, color: "#8B8272", marginLeft: 4 },
   favoriteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#E4D5BE",
+    position: "absolute",
+    right: 12,
+    bottom: 14,
+    width: 30,
+    height: 30,
     alignItems: "center",
     justifyContent: "center",
   },
-  favoriteBtnActive: {
-    backgroundColor: "#ffe5e5",
+
+  modalDetalhesOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
   },
-  pagination: {
+  modalDetalhesContainer: {
+    backgroundColor: "#f1eae0",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: "85%",
+    padding: 20,
+  },
+  closeButton: {
+    alignSelf: "flex-end",
+    backgroundColor: "#584128",
+    borderRadius: 20,
+    padding: 6,
+    marginBottom: 10,
+  },
+  carouselContainer: { height: 200, position: "relative", marginBottom: 10 },
+  detalhesImage: { width: "100%", height: "100%", borderRadius: 8 },
+  navButton: {
+    position: "absolute",
+    top: "45%",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
+    padding: 4,
+  },
+  navButtonLeft: { left: 10 },
+  navButtonRight: { right: 10 },
+  imageCounter: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  imageCounterText: { color: "#FFF", fontSize: 12 },
+  thumbnailScroll: { flexDirection: "row", marginBottom: 15 },
+  thumbnailImage: {
+    width: 60,
+    height: 45,
+    marginRight: 8,
+    borderRadius: 4,
+    opacity: 0.6,
+  },
+  thumbnailImageActive: { opacity: 1, borderWidth: 2, borderColor: "#584128" },
+  detalhesContent: { gap: 12 },
+  detalhesTitulo: { fontSize: 20, fontWeight: "bold", color: "#333" },
+  detalhesPrecoContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  detalhesPreco: { fontSize: 18, fontWeight: "bold", color: "#584128" },
+  detalhesEstoque: { fontSize: 12, color: "#666" },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  infoText: { fontSize: 14, color: "#444" },
+  descricaoContainer: { marginTop: 10 },
+  descricaoTitulo: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#584128",
+    marginBottom: 4,
+  },
+  descricaoTexto: { fontSize: 14, color: "#555", lineHeight: 20 },
+  quantidadeContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderColor: "#EEE",
+    paddingTop: 12,
+  },
+  quantidadeLabel: { fontSize: 14, color: "#333" },
+  quantidadeSelector: { flexDirection: "row", alignItems: "center", gap: 12 },
+  quantidadeBtn: {
+    borderWidth: 1,
+    borderColor: "#584128",
+    borderRadius: 4,
+    padding: 4,
+  },
+  quantidadeValor: { fontSize: 16, fontWeight: "bold" },
+  totalContainerModal: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 10,
+  },
+  totalLabel: { fontSize: 16, fontWeight: "bold" },
+  totalValor: { fontSize: 18, fontWeight: "bold", color: "#584128" },
+  btnAdicionarCarrinho: {
+    backgroundColor: "#584128",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 20,
+    padding: 14,
+    borderRadius: 8,
     gap: 8,
-  },
-  pageButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#ffffff",
-  },
-  pageButtonActive: {
-    backgroundColor: "#584128",
-  },
-  pageButtonDisabled: {
-    opacity: 0.5,
-  },
-  pageText: {
-    fontSize: 16,
-    color: "#584128",
-  },
-  pageTextActive: {
-    color: "#ffffff",
-  },
-  pageDots: {
-    fontSize: 16,
-    color: "#ff0404",
-    marginHorizontal: 4,
-  },
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 50,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#999",
     marginTop: 10,
   },
+  btnAdicionarText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
+  pagination: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  pageButton: {
+    padding: 10,
+    backgroundColor: "#FFF",
+    borderRadius: 30,
+  },
+  pageButtonActive: { backgroundColor: "#584128" },
+  pageText: { color: "#584128" },
+  pageTextActive: { color: "#FFF" },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -700,45 +911,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    padding: 24,
+    backgroundColor: "#FFF",
+    padding: 20,
+    borderRadius: 12,
     width: "80%",
     alignItems: "center",
   },
-  modalIcon: {
-    marginBottom: 15,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 10,
-  },
-  modalText: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  modalButtons: {
-    width: "100%",
-    gap: 10,
-  },
-  modalButton: {
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-  },
+  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
+  modalText: { textAlign: "center", color: "#666", marginBottom: 16 },
+  modalButtons: { flexDirection: "row", gap: 12 },
   modalButtonLogin: {
     backgroundColor: "#584128",
+    padding: 10,
+    borderRadius: 6,
   },
-  modalButtonCancel: {
-    backgroundColor: "#f0f0f0",
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
+  modalButtonCancel: { backgroundColor: "#EEE", padding: 10, borderRadius: 6 },
+  modalButtonText: { color: "#FFF", fontWeight: "bold" },
 });
