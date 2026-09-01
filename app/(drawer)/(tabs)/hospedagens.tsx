@@ -83,9 +83,33 @@ export default function HospedagensScreen() {
 
   const itensPorPagina = 6;
 
+  // 🔑 CHAVE ÚNICA DA CORREÇÃO
+  // Antes, o código dependia de uma chave "userId" separada do token de login.
+  // Se essa chave não existisse (ex: o login só salva "@Immersia:token"),
+  // salvarCarrinho() falhava silenciosamente e nada era gravado,
+  // mas o Alert de sucesso aparecia do mesmo jeito.
+  //
+  // Agora usamos o próprio token como identificador de carrinho (fallback seguro)
+  // e, se nem o token existir, avisamos o usuário em vez de falhar calado.
+  const obterIdentificadorUsuario = async (): Promise<string | null> => {
+    // tenta userId "tradicional" primeiro (compatibilidade com dados já salvos)
+    const userId = await AsyncStorage.getItem("userId");
+    if (userId) return userId;
+
+    // fallback: usa o token como identificador único do carrinho
+    const token = await AsyncStorage.getItem("@Immersia:token");
+    if (token) {
+      // opcional: persiste userId a partir do token pra próximas vezes
+      await AsyncStorage.setItem("userId", token);
+      return token;
+    }
+
+    return null;
+  };
+
   const carregarCarrinho = async () => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const carrinhoSalvo = await AsyncStorage.getItem(`carrinho_${userId}`);
         if (carrinhoSalvo) setCarrinho(JSON.parse(carrinhoSalvo));
@@ -95,18 +119,30 @@ export default function HospedagensScreen() {
     }
   };
 
-  const salvarCarrinho = async (novoCarrinho: any[]) => {
+  const salvarCarrinho = async (novoCarrinho: any[]): Promise<boolean> => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
-      if (userId) {
-        await AsyncStorage.setItem(
-          `carrinho_${userId}`,
-          JSON.stringify(novoCarrinho),
+      const userId = await obterIdentificadorUsuario();
+
+      if (!userId) {
+        // Antes: falhava em silêncio (if (userId) {...}) e o Alert de
+        // sucesso aparecia mesmo sem nada ser salvo. Agora avisamos.
+        Alert.alert(
+          "Sessão expirada",
+          "Não foi possível identificar sua sessão. Faça login novamente para usar o carrinho.",
         );
-        setCarrinho(novoCarrinho);
+        return false;
       }
+
+      await AsyncStorage.setItem(
+        `carrinho_${userId}`,
+        JSON.stringify(novoCarrinho),
+      );
+      setCarrinho(novoCarrinho);
+      return true;
     } catch (error) {
       console.error("Erro ao salvar carrinho:", error);
+      Alert.alert("Erro", "Não foi possível salvar o carrinho.");
+      return false;
     }
   };
 
@@ -141,7 +177,7 @@ export default function HospedagensScreen() {
 
   const carregarFavoritos = async () => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const favoritosSalvos = await AsyncStorage.getItem(
           `favoritos_hospedagens_${userId}`,
@@ -183,7 +219,7 @@ export default function HospedagensScreen() {
     if (!isLoggedIn) return;
 
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const novosFavoritos = [...favoritos, id];
         setFavoritos(novosFavoritos);
@@ -200,7 +236,7 @@ export default function HospedagensScreen() {
 
   const removerFavorito = async (id: number) => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const novosFavoritos = favoritos.filter((favId) => favId !== id);
         setFavoritos(novosFavoritos);
@@ -250,7 +286,9 @@ export default function HospedagensScreen() {
       ];
     }
 
-    await salvarCarrinho(novoCarrinho);
+    // 👇 Só mostra sucesso se REALMENTE salvou
+    const salvou = await salvarCarrinho(novoCarrinho);
+    if (!salvou) return;
 
     Alert.alert(
       "Carrinho",
@@ -264,11 +302,56 @@ export default function HospedagensScreen() {
           text: "Ver Carrinho",
           onPress: () => {
             setModalDetalhesVisible(false);
-            router.push("/carrinho");
+            router.push("./carrinho");
           },
         },
       ],
     );
+  };
+
+  // Adiciona 1 diária direto pelo card, sem precisar abrir o modal
+  const adicionarAoCarrinhoRapido = async (item: Hospedagem) => {
+    const isLoggedIn = await verificarLogin("carrinho");
+    if (!isLoggedIn) return;
+
+    if (item.quantidade_estoque < 1) {
+      Alert.alert("Erro", "Hospedagem indisponível no momento.");
+      return;
+    }
+
+    const itemExistente = carrinho.find((c) => c.id === item.id);
+    let novoCarrinho;
+
+    if (itemExistente) {
+      if (itemExistente.quantidade + 1 > item.quantidade_estoque) {
+        Alert.alert("Erro", "Quantidade de diárias indisponível");
+        return;
+      }
+      novoCarrinho = carrinho.map((c) =>
+        c.id === item.id ? { ...c, quantidade: c.quantidade + 1 } : c,
+      );
+    } else {
+      novoCarrinho = [
+        ...carrinho,
+        {
+          id: item.id,
+          nome: item.nome,
+          preco: item.preco,
+          quantidade: 1,
+          imagem: item.imagem_url?.[0] || null,
+          tipo: "hospedagem",
+        },
+      ];
+    }
+
+    // 👇 Só mostra sucesso se REALMENTE salvou
+    const salvou = await salvarCarrinho(novoCarrinho);
+    if (!salvou) return;
+
+    Alert.alert("Carrinho", `"${item.nome}" adicionada ao carrinho!`, [
+      { text: "Continuar Comprando" },
+      { text: "Ver Carrinho", onPress: () => router.push("./carrinho") },
+    ]);
   };
 
   const abrirDetalhes = (item: Hospedagem) => {
@@ -351,11 +434,25 @@ export default function HospedagensScreen() {
               </Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.cartBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              adicionarAoCarrinhoRapido(item);
+            }}
+          >
+            <Feather name="shopping-cart" size={18} color="#584128" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.favoriteBtn}
-            onPress={() =>
-              isFavorito ? removerFavorito(item.id) : adicionarFavorito(item.id)
-            }
+            onPress={(e) => {
+              e.stopPropagation();
+              isFavorito
+                ? removerFavorito(item.id)
+                : adicionarFavorito(item.id);
+            }}
           >
             <Feather
               name="heart"
@@ -545,7 +642,7 @@ export default function HospedagensScreen() {
                 >
                   <Feather name="shopping-cart" size={20} color="#FFF" />
                   <Text style={styles.btnAdicionarText}>
-                    Reservar Hospedagem
+                    Adicionar ao Carrinho
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -725,7 +822,6 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 12, paddingBottom: 20 },
   gridRow: { justifyContent: "space-between", marginBottom: 16 },
 
-  // Estilo customizado idêntico à imagem enviada
   card: {
     flex: 0.48,
     backgroundColor: "#E4D5BE",
@@ -760,7 +856,7 @@ const styles = StyleSheet.create({
   },
   multiImageText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
   cardContent: { padding: 12, position: "relative" },
-  cardText: { paddingRight: 28 },
+  cardText: { paddingRight: 56 },
   cardPrice: {
     fontSize: 13,
     color: "#4A3B2C",
@@ -780,6 +876,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   locationText: { fontSize: 12, color: "#8B8272", marginLeft: 4 },
+  cartBtn: {
+    position: "absolute",
+    right: 40,
+    bottom: 14,
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   favoriteBtn: {
     position: "absolute",
     right: 12,

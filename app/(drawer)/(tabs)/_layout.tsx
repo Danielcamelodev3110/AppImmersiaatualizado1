@@ -1,14 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import { Tabs, useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  Modal,
   Pressable,
   StyleSheet,
   Text,
-  View,
-  Modal,
   TouchableOpacity,
+  View,
 } from "react-native";
-import { useState } from "react";
 
 function ProdutosMenuTrigger() {
   const router = useRouter();

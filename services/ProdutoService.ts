@@ -55,4 +55,27 @@ export const produtoService = {
       throw error;
     }
   },
+  async deletarProduto(idProduto: number) {
+    try {
+      // Configuração utilizando o IP do servidor NestJS
+      const url = `http://localhost:3000/produtos/${idProduto}`;
+
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Erro ao deletar o produto.");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Erro ao deletar produto no front-end:", error);
+      throw error;
+    }
+  },
 };

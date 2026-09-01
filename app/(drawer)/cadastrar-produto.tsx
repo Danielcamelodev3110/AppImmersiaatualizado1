@@ -117,7 +117,7 @@ export default function CadastrarProdutoScreen() {
       Alert.alert("Sucesso!", "Sua experiência foi cadastrada perfeitamente.", [
         {
           text: "OK",
-          onPress: () => router.replace("/"), // Ajustado para voltar à Home principal
+          onPress: () => router.replace("/minhas-hospedagens"), // Ajustado para voltar à Home principal
         },
       ]);
     } catch (error: any) {

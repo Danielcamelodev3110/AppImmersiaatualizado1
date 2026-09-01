@@ -45,7 +45,15 @@ export default function PerfilScreen() {
   // Garante a leitura correta vinda da propriedade do banco de dados (Prisma)
   const userType = user?.tipo_usuario || "cliente";
 
+  // Itens de menu base que aparecem para TODOS os usuários
   const baseMenuItems = [
+    {
+      icon: "create-outline",
+      title: "Editar Perfil",
+      route: "/editar-perfil",
+      color: "#584128",
+      description: "Atualize seus dados cadastrais e senha",
+    },
     {
       icon: "chatbubble-outline",
       title: "Suporte",
@@ -55,7 +63,7 @@ export default function PerfilScreen() {
     {
       icon: "document-text-outline",
       title: "Termos e Privacidade",
-      route: "/termos",
+      route: "../termos",
       color: "#999999",
     },
   ];
@@ -70,7 +78,7 @@ export default function PerfilScreen() {
     {
       icon: "calendar-outline",
       title: "Minhas Reservas",
-      route: "/reservas",
+      route: "",
       color: "#4ECDC4",
     },
   ];
@@ -92,7 +100,7 @@ export default function PerfilScreen() {
     {
       icon: "stats-chart-outline",
       title: "Meus Ganhos",
-      route: "/ganhos",
+      route: "",
       color: "#96CEB4",
     },
   ];
@@ -107,7 +115,7 @@ export default function PerfilScreen() {
     {
       icon: "stats-chart-outline",
       title: "Relatórios Gerais",
-      route: "/admin/relatorios",
+      route: "",
       color: "#584128",
     },
   ];

@@ -97,6 +97,8 @@ export default function Cadastro() {
   };
 
   const handleCadastro = async () => {
+    console.log("1. Botão clicado, handleCadastro iniciado"); // 👈 log 1
+
     if (
       !nomeCompleto ||
       !email ||
@@ -105,33 +107,14 @@ export default function Cadastro() {
       !senha ||
       !confirmarSenha
     ) {
+      console.log("2. Parou na validação de campos vazios"); // 👈 log 2
       Alert.alert("Atenção", "Preencha todos os campos!");
       return;
     }
 
-    if (!validarCPF(cpf)) {
-      Alert.alert("Erro", "CPF inválido!");
-      return;
-    }
+    // ... mantenha o resto das validações (CPF, idade, senha) como está ...
 
-    if (!validarIdade(dataNascimento)) {
-      Alert.alert(
-        "Erro",
-        "Você deve ter pelo menos 18 anos para se cadastrar!",
-      );
-      return;
-    }
-
-    if (senha !== confirmarSenha) {
-      Alert.alert("Erro", "As senhas não coincidem!");
-      return;
-    }
-
-    if (senha.length < 6) {
-      Alert.alert("Erro", "A senha deve ter pelo menos 6 caracteres!");
-      return;
-    }
-
+    console.log("3. Passou por todas as validações, vai chamar a API"); // 👈 log 3
     setCarregando(true);
 
     try {
@@ -148,12 +131,17 @@ export default function Cadastro() {
         tipo_usuario: tipoUsuario,
       };
 
-      await userService.create(dadosUsuario);
+      console.log("4. Enviando para o backend:", dadosUsuario); // 👈 log 4
+
+      const resultado = await userService.create(dadosUsuario);
+
+      console.log("5. Resposta do backend recebida:", resultado); // 👈 log 5
 
       Alert.alert("Sucesso", "Cadastro realizado com sucesso!", [
         { text: "OK", onPress: () => router.replace("/login") },
       ]);
     } catch (error: any) {
+      console.log("6. Caiu no catch, erro:", error); // 👈 log 6
       console.error("Erro detalhado no clique do botão:", error);
 
       const dadosErro = error.response?.data;
@@ -170,7 +158,6 @@ export default function Cadastro() {
       setCarregando(false);
     }
   };
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />

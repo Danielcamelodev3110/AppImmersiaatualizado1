@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -17,6 +18,12 @@ const getBaseUrl = () => {
 
 const BASE_URL = getBaseUrl();
 const CHAVE_SESSAO = "immersia_user_session";
+
+// 👇 Chaves usadas por outras telas do app (ex: hospedagens.tsx) pra checar
+// se o usuário está logado e pra separar carrinho/favoritos por usuário.
+// Mantidas em sincronia com CHAVE_SESSAO pra não quebrar essas telas.
+const CHAVE_TOKEN = "@Immersia:token";
+const CHAVE_USER_ID = "userId";
 
 export interface CreateUserPayload {
   nome_completo: string;
@@ -87,6 +94,12 @@ export const userService = {
         } else {
           localStorage.setItem(CHAVE_SESSAO, dadosString);
         }
+
+        // 👇 Backend ainda não emite um JWT de verdade — usamos o próprio
+        // id do usuário como "token" só pra marcar que existe uma sessão
+        // ativa, já que é isso que as outras telas checam.
+        await AsyncStorage.setItem(CHAVE_TOKEN, String(dados.user.id));
+        await AsyncStorage.setItem(CHAVE_USER_ID, String(dados.user.id));
       }
 
       return dados;
@@ -119,6 +132,11 @@ export const userService = {
       } else {
         localStorage.removeItem(CHAVE_SESSAO);
       }
+
+      // 👇 Limpa também as chaves usadas pelas outras telas
+      await AsyncStorage.removeItem(CHAVE_TOKEN);
+      await AsyncStorage.removeItem(CHAVE_USER_ID);
+
       return true;
     } catch (error) {
       console.error("Erro ao deletar sessão:", error);
@@ -126,7 +144,7 @@ export const userService = {
     }
   },
 
-  // 🌟 NOVA FUNÇÃO: Busca todos os usuários cadastrados
+  // 🌟 Busca todos os usuários cadastrados
   findAll: async (): Promise<UserResponse[]> => {
     try {
       const response = await fetch(`${BASE_URL}/users`, {
@@ -148,7 +166,7 @@ export const userService = {
     }
   },
 
-  // 🌟 NOVA FUNÇÃO: Exclui um usuário pelo ID
+  // 🌟 Exclui um usuário pelo ID
   remove: async (id: number): Promise<void> => {
     try {
       const response = await fetch(`${BASE_URL}/users/${id}`, {
@@ -163,6 +181,46 @@ export const userService = {
         throw erroInstancia;
       }
     } catch (error: any) {
+      throw error;
+    }
+  },
+
+  // Atualiza os dados do usuário logado
+  async updateProfile(dados: {
+    nome_completo: string;
+    email: string;
+    telefone?: string;
+  }) {
+    try {
+      const sessao = await this.getSavedSession();
+      const usuarioLogado = sessao?.user ? sessao.user : sessao;
+      const userId = usuarioLogado?.id;
+
+      if (!userId) {
+        throw new Error("ID do usuário não encontrado na sessão.");
+      }
+
+      const url = `${BASE_URL}/users/${userId}`;
+
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dados),
+      });
+
+      const respostaServidor = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          respostaServidor.message || "Erro retornado do servidor.",
+        );
+      }
+
+      return respostaServidor;
+    } catch (error) {
+      console.error("Erro no userService.updateProfile:", error);
       throw error;
     }
   },
