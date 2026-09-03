@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -16,26 +16,31 @@ export default function PerfilScreen() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function carregarPerfil() {
-      try {
-        const sessao = await userService.getSavedSession();
-        console.log("Sessão carregada no Perfil:", sessao);
+  const carregarPerfil = useCallback(async () => {
+    try {
+      const sessao = await userService.getSavedSession();
+      console.log("Sessão carregada no Perfil:", sessao);
 
-        if (!sessao) {
-          router.replace("/login");
-        } else {
-          setUser(sessao);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar sessão:", error);
+      if (!sessao) {
         router.replace("/login");
-      } finally {
-        setLoading(false);
+      } else {
+        setUser(sessao);
       }
+    } catch (error) {
+      console.error("Erro ao carregar sessão:", error);
+      router.replace("/login");
+    } finally {
+      setLoading(false);
     }
-    carregarPerfil();
-  }, []);
+  }, [router]);
+
+  // 👇 Roda toda vez que a tela ganha foco (ex: usuário é redirecionado
+  // para cá após login, editar perfil, etc.), não só na primeira montagem.
+  useFocusEffect(
+    useCallback(() => {
+      carregarPerfil();
+    }, [carregarPerfil]),
+  );
 
   const handleLogout = async () => {
     await userService.logout();

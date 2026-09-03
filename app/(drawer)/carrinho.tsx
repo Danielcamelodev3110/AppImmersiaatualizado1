@@ -59,7 +59,7 @@ export default function Carrinho() {
       limparCarrinho();
 
       Alert.alert("Sucesso", "Compra realizada com sucesso!", [
-        { text: "OK", onPress: () => router.push("/minhas-hospedagens") },
+        { text: "OK", onPress: () => router.push("/minhas-reservas") },
       ]);
     } catch (error: any) {
       const dadosErro = error.response?.data;
