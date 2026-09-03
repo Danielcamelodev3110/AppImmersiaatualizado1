@@ -16,6 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useCarrinho } from "../../../constants/CarrinhoContext"; // ajuste o caminho conforme sua estrutura
+import { produtoService } from "../../../services/ProdutoService"; // ajuste o caminho se necessário
 
 interface Hospedagem {
   id: number;
@@ -64,8 +66,9 @@ const normalizarImagens = (imagemUrl: any): string[] => {
 
 export default function HospedagensScreen() {
   const router = useRouter();
+  const { itens: carrinho, adicionarAoCarrinho: adicionarNoContexto } =
+    useCarrinho(); // 👈 novo: carrinho agora vem do Context
   const [favoritos, setFavoritos] = useState<number[]>([]);
-  const [carrinho, setCarrinho] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalLoginVisible, setModalLoginVisible] = useState(false);
@@ -89,17 +92,16 @@ export default function HospedagensScreen() {
   // salvarCarrinho() falhava silenciosamente e nada era gravado,
   // mas o Alert de sucesso aparecia do mesmo jeito.
   //
-  // Agora usamos o próprio token como identificador de carrinho (fallback seguro)
+  // Agora usamos o próprio token como identificador (fallback seguro)
   // e, se nem o token existir, avisamos o usuário em vez de falhar calado.
+  // Esse identificador ainda é usado pelos FAVORITOS (o carrinho não
+  // depende mais de AsyncStorage, pois vive no CarrinhoContext).
   const obterIdentificadorUsuario = async (): Promise<string | null> => {
-    // tenta userId "tradicional" primeiro (compatibilidade com dados já salvos)
     const userId = await AsyncStorage.getItem("userId");
     if (userId) return userId;
 
-    // fallback: usa o token como identificador único do carrinho
     const token = await AsyncStorage.getItem("@Immersia:token");
     if (token) {
-      // opcional: persiste userId a partir do token pra próximas vezes
       await AsyncStorage.setItem("userId", token);
       return token;
     }
@@ -107,56 +109,13 @@ export default function HospedagensScreen() {
     return null;
   };
 
-  const carregarCarrinho = async () => {
-    try {
-      const userId = await obterIdentificadorUsuario();
-      if (userId) {
-        const carrinhoSalvo = await AsyncStorage.getItem(`carrinho_${userId}`);
-        if (carrinhoSalvo) setCarrinho(JSON.parse(carrinhoSalvo));
-      }
-    } catch (error) {
-      console.error("Erro ao carregar carrinho:", error);
-    }
-  };
-
-  const salvarCarrinho = async (novoCarrinho: any[]): Promise<boolean> => {
-    try {
-      const userId = await obterIdentificadorUsuario();
-
-      if (!userId) {
-        // Antes: falhava em silêncio (if (userId) {...}) e o Alert de
-        // sucesso aparecia mesmo sem nada ser salvo. Agora avisamos.
-        Alert.alert(
-          "Sessão expirada",
-          "Não foi possível identificar sua sessão. Faça login novamente para usar o carrinho.",
-        );
-        return false;
-      }
-
-      await AsyncStorage.setItem(
-        `carrinho_${userId}`,
-        JSON.stringify(novoCarrinho),
-      );
-      setCarrinho(novoCarrinho);
-      return true;
-    } catch (error) {
-      console.error("Erro ao salvar carrinho:", error);
-      Alert.alert("Erro", "Não foi possível salvar o carrinho.");
-      return false;
-    }
-  };
-
+  // 👇 função de busca agora usa o produtoService (BASE_URL de produção)
   const buscarHospedagens = async () => {
     try {
       setCarregandoAPI(true);
-      const response = await fetch("http://localhost:3000/produtos", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
 
-      if (!response.ok) throw new Error("Erro ao buscar hospedagens");
+      const data = await produtoService.findAll();
 
-      const data = await response.json();
       const hospedagensFiltradas = data
         .filter((produto: any) => produto.tipo_produto === "hospedagem")
         .map((produto: any) => ({
@@ -193,13 +152,11 @@ export default function HospedagensScreen() {
     useCallback(() => {
       buscarHospedagens();
       carregarFavoritos();
-      carregarCarrinho();
     }, []),
   );
 
   useEffect(() => {
     carregarFavoritos();
-    carregarCarrinho();
   }, []);
 
   const verificarLogin = async (
@@ -261,34 +218,16 @@ export default function HospedagensScreen() {
       return;
     }
 
-    const itemExistente = carrinho.find(
-      (item) => item.id === produtoSelecionado.id,
+    adicionarNoContexto(
+      {
+        id: produtoSelecionado.id,
+        nome: produtoSelecionado.nome,
+        preco: produtoSelecionado.preco,
+        imagem_url: produtoSelecionado.imagem_url?.[0],
+        tipo_produto: "hospedagem",
+      },
+      quantidadeSelecionada,
     );
-    let novoCarrinho;
-
-    if (itemExistente) {
-      novoCarrinho = carrinho.map((item) =>
-        item.id === produtoSelecionado.id
-          ? { ...item, quantidade: item.quantidade + quantidadeSelecionada }
-          : item,
-      );
-    } else {
-      novoCarrinho = [
-        ...carrinho,
-        {
-          id: produtoSelecionado.id,
-          nome: produtoSelecionado.nome,
-          preco: produtoSelecionado.preco,
-          quantidade: quantidadeSelecionada,
-          imagem: produtoSelecionado.imagem_url?.[0] || null,
-          tipo: "hospedagem",
-        },
-      ];
-    }
-
-    // 👇 Só mostra sucesso se REALMENTE salvou
-    const salvou = await salvarCarrinho(novoCarrinho);
-    if (!salvou) return;
 
     Alert.alert(
       "Carrinho",
@@ -302,14 +241,13 @@ export default function HospedagensScreen() {
           text: "Ver Carrinho",
           onPress: () => {
             setModalDetalhesVisible(false);
-            router.push("./carrinho");
+            router.push("../carrinho");
           },
         },
       ],
     );
   };
 
-  // Adiciona 1 diária direto pelo card, sem precisar abrir o modal
   const adicionarAoCarrinhoRapido = async (item: Hospedagem) => {
     const isLoggedIn = await verificarLogin("carrinho");
     if (!isLoggedIn) return;
@@ -319,38 +257,29 @@ export default function HospedagensScreen() {
       return;
     }
 
-    const itemExistente = carrinho.find((c) => c.id === item.id);
-    let novoCarrinho;
-
-    if (itemExistente) {
-      if (itemExistente.quantidade + 1 > item.quantidade_estoque) {
-        Alert.alert("Erro", "Quantidade de diárias indisponível");
-        return;
-      }
-      novoCarrinho = carrinho.map((c) =>
-        c.id === item.id ? { ...c, quantidade: c.quantidade + 1 } : c,
-      );
-    } else {
-      novoCarrinho = [
-        ...carrinho,
-        {
-          id: item.id,
-          nome: item.nome,
-          preco: item.preco,
-          quantidade: 1,
-          imagem: item.imagem_url?.[0] || null,
-          tipo: "hospedagem",
-        },
-      ];
+    const itemExistente = carrinho.find((c) => c.produto.id === item.id);
+    if (
+      itemExistente &&
+      itemExistente.quantidade + 1 > item.quantidade_estoque
+    ) {
+      Alert.alert("Erro", "Quantidade de diárias indisponível");
+      return;
     }
 
-    // 👇 Só mostra sucesso se REALMENTE salvou
-    const salvou = await salvarCarrinho(novoCarrinho);
-    if (!salvou) return;
+    adicionarNoContexto(
+      {
+        id: item.id,
+        nome: item.nome,
+        preco: item.preco,
+        imagem_url: item.imagem_url?.[0],
+        tipo_produto: "hospedagem",
+      },
+      1,
+    );
 
     Alert.alert("Carrinho", `"${item.nome}" adicionada ao carrinho!`, [
       { text: "Continuar Comprando" },
-      { text: "Ver Carrinho", onPress: () => router.push("./carrinho") },
+      { text: "Ver Carrinho", onPress: () => router.push("../carrinho") },
     ]);
   };
 

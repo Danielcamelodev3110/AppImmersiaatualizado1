@@ -6,14 +6,14 @@ import { Platform } from "react-native";
 const getBaseUrl = () => {
   if (__DEV__) {
     if (Platform.OS === "web") {
-      return "http://localhost:3000";
+      return "https://back-immercia.onrender.com";
     }
     if (Platform.OS === "android") {
-      return "http://10.0.2.2:3000";
+      return "https://back-immercia.onrender.com";
     }
-    return "http://10.108.22.69:3000"; // Seu IP do Ethernet
+    return "https://back-immercia.onrender.com"; // Seu IP do Ethernet
   }
-  return "http://localhost:3000"; // Fallback caso não esteja em __DEV__
+  return "https://back-immercia.onrender.com"; // Fallback caso não esteja em __DEV__
 };
 
 const BASE_URL = getBaseUrl();

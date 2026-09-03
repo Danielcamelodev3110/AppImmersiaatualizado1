@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = "https://back-immercia.onrender.com";
 
 export interface AdicionarAoCarrinhoPayload {
   id_cliente: number;

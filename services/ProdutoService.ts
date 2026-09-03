@@ -1,4 +1,4 @@
-const BASE_URL = "http://localhost:3000";
+const BASE_URL = "https://back-immercia.onrender.com";
 
 export interface CreateProdutoPayload {
   nome: string;
@@ -38,6 +38,26 @@ export const produtoService = {
     }
   },
 
+  // 👇 novo método: busca todos os produtos (usado para listar hospedagens/experiências)
+  findAll: async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/produtos`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const dados = await response.json();
+
+      if (!response.ok) {
+        throw new Error("Erro ao buscar produtos");
+      }
+
+      return dados;
+    } catch (error) {
+      throw error;
+    }
+  },
+
   // No seu produtoService.ts (ou dentro do objeto produtoService existente)
   findMinhasHospedagens: async (idCliente: number) => {
     try {
@@ -55,10 +75,10 @@ export const produtoService = {
       throw error;
     }
   },
+
   async deletarProduto(idProduto: number) {
     try {
-      // Configuração utilizando o IP do servidor NestJS
-      const url = `http://localhost:3000/produtos/${idProduto}`;
+      const url = `${BASE_URL}/produtos/${idProduto}`;
 
       const response = await fetch(url, {
         method: "DELETE",
