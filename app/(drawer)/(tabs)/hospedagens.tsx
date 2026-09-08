@@ -67,7 +67,7 @@ const normalizarImagens = (imagemUrl: any): string[] => {
 export default function HospedagensScreen() {
   const router = useRouter();
   const { itens: carrinho, adicionarAoCarrinho: adicionarNoContexto } =
-    useCarrinho(); // 👈 novo: carrinho agora vem do Context
+    useCarrinho();
   const [favoritos, setFavoritos] = useState<number[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,18 +84,17 @@ export default function HospedagensScreen() {
     "favorito",
   );
 
+  // Novos estados para datas
+  const [checkInDate, setCheckInDate] = useState<Date | null>(null);
+  const [checkOutDate, setCheckOutDate] = useState<Date | null>(null);
+  const [modalCalendarioVisible, setModalCalendarioVisible] = useState(false);
+  const [tipoDataSelecionada, setTipoDataSelecionada] = useState<
+    "checkin" | "checkout" | null
+  >(null);
+  const [diasEstadia, setDiasEstadia] = useState(0);
+
   const itensPorPagina = 6;
 
-  // 🔑 CHAVE ÚNICA DA CORREÇÃO
-  // Antes, o código dependia de uma chave "userId" separada do token de login.
-  // Se essa chave não existisse (ex: o login só salva "@Immersia:token"),
-  // salvarCarrinho() falhava silenciosamente e nada era gravado,
-  // mas o Alert de sucesso aparecia do mesmo jeito.
-  //
-  // Agora usamos o próprio token como identificador (fallback seguro)
-  // e, se nem o token existir, avisamos o usuário em vez de falhar calado.
-  // Esse identificador ainda é usado pelos FAVORITOS (o carrinho não
-  // depende mais de AsyncStorage, pois vive no CarrinhoContext).
   const obterIdentificadorUsuario = async (): Promise<string | null> => {
     const userId = await AsyncStorage.getItem("userId");
     if (userId) return userId;
@@ -109,7 +108,6 @@ export default function HospedagensScreen() {
     return null;
   };
 
-  // 👇 função de busca agora usa o produtoService (BASE_URL de produção)
   const buscarHospedagens = async () => {
     try {
       setCarregandoAPI(true);
@@ -158,6 +156,66 @@ export default function HospedagensScreen() {
   useEffect(() => {
     carregarFavoritos();
   }, []);
+
+  // Função para calcular diferença de dias
+  const calcularDias = useCallback(() => {
+    if (checkInDate && checkOutDate) {
+      const diffTime = checkOutDate.getTime() - checkInDate.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      setDiasEstadia(diffDays > 0 ? diffDays : 0);
+      return diffDays;
+    }
+    setDiasEstadia(0);
+    return 0;
+  }, [checkInDate, checkOutDate]);
+
+  useEffect(() => {
+    calcularDias();
+  }, [calcularDias]);
+
+  // Função para formatar data
+  const formatarDataBR = (date: Date | null): string => {
+    if (!date) return "Selecionar data";
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  // Função para gerar dias do mês
+  const gerarCalendario = () => {
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = hoje.getMonth();
+    const dias = [];
+
+    // Gerar próximos 60 dias para seleção
+    for (let i = 0; i < 60; i++) {
+      const data = new Date(anoAtual, mesAtual, hoje.getDate() + i);
+      dias.push(data);
+    }
+
+    return dias;
+  };
+
+  const abrirCalendario = (tipo: "checkin" | "checkout") => {
+    setTipoDataSelecionada(tipo);
+    setModalCalendarioVisible(true);
+  };
+
+  const selecionarData = (data: Date) => {
+    if (tipoDataSelecionada === "checkin") {
+      setCheckInDate(data);
+      // Se a data de checkout for anterior à nova data de check-in, limpar
+      if (checkOutDate && data >= checkOutDate) {
+        setCheckOutDate(null);
+      }
+    } else if (tipoDataSelecionada === "checkout") {
+      setCheckOutDate(data);
+    }
+    setModalCalendarioVisible(false);
+  };
 
   const verificarLogin = async (
     acao: "favorito" | "carrinho" = "favorito",
@@ -213,7 +271,19 @@ export default function HospedagensScreen() {
     if (!isLoggedIn) return;
     if (!produtoSelecionado) return;
 
-    if (quantidadeSelecionada > produtoSelecionado.quantidade_estoque) {
+    // Verificar se as datas foram selecionadas
+    if (!checkInDate || !checkOutDate) {
+      Alert.alert("Erro", "Selecione as datas de check-in e check-out");
+      return;
+    }
+
+    const dias = calcularDias();
+    if (dias <= 0) {
+      Alert.alert("Erro", "A data de check-out deve ser após o check-in");
+      return;
+    }
+
+    if (dias > produtoSelecionado.quantidade_estoque) {
       Alert.alert("Erro", "Quantidade de diárias indisponível");
       return;
     }
@@ -226,12 +296,12 @@ export default function HospedagensScreen() {
         imagem_url: produtoSelecionado.imagem_url?.[0],
         tipo_produto: "hospedagem",
       },
-      quantidadeSelecionada,
+      dias,
     );
 
     Alert.alert(
       "Carrinho",
-      `${quantidadeSelecionada} diária(s) de "${produtoSelecionado.nome}" adicionada(s)!`,
+      `${dias} diária(s) de "${produtoSelecionado.nome}" adicionada(s)!\nCheck-in: ${formatarDataBR(checkInDate)}\nCheck-out: ${formatarDataBR(checkOutDate)}`,
       [
         {
           text: "Continuar Comprando",
@@ -252,40 +322,19 @@ export default function HospedagensScreen() {
     const isLoggedIn = await verificarLogin("carrinho");
     if (!isLoggedIn) return;
 
-    if (item.quantidade_estoque < 1) {
-      Alert.alert("Erro", "Hospedagem indisponível no momento.");
-      return;
-    }
-
-    const itemExistente = carrinho.find((c) => c.produto.id === item.id);
-    if (
-      itemExistente &&
-      itemExistente.quantidade + 1 > item.quantidade_estoque
-    ) {
-      Alert.alert("Erro", "Quantidade de diárias indisponível");
-      return;
-    }
-
-    adicionarNoContexto(
-      {
-        id: item.id,
-        nome: item.nome,
-        preco: item.preco,
-        imagem_url: item.imagem_url?.[0],
-        tipo_produto: "hospedagem",
-      },
-      1,
+    // Abrir modal de detalhes para seleção de datas
+    abrirDetalhes(item);
+    Alert.alert(
+      "Atenção",
+      "Selecione as datas de check-in e check-out para continuar.",
     );
-
-    Alert.alert("Carrinho", `"${item.nome}" adicionada ao carrinho!`, [
-      { text: "Continuar Comprando" },
-      { text: "Ver Carrinho", onPress: () => router.push("../carrinho") },
-    ]);
   };
 
   const abrirDetalhes = (item: Hospedagem) => {
     setProdutoSelecionado(item);
     setQuantidadeSelecionada(1);
+    setCheckInDate(null);
+    setCheckOutDate(null);
     setModalDetalhesVisible(true);
   };
 
@@ -394,6 +443,103 @@ export default function HospedagensScreen() {
     );
   };
 
+  const ModalCalendario = () => {
+    const dias = gerarCalendario();
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    return (
+      <Modal
+        visible={modalCalendarioVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalCalendarioVisible(false)}
+      >
+        <View style={styles.modalDetalhesOverlay}>
+          <View style={styles.calendarioContainer}>
+            <View style={styles.calendarioHeader}>
+              <Text style={styles.calendarioTitulo}>
+                {tipoDataSelecionada === "checkin"
+                  ? "Selecione o Check-in"
+                  : "Selecione o Check-out"}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setModalCalendarioVisible(false)}
+                style={styles.closeButton}
+              >
+                <Feather name="x" size={24} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.calendarioGrid}>
+                {dias.map((data, index) => {
+                  const isSelected =
+                    (tipoDataSelecionada === "checkin" &&
+                      checkInDate &&
+                      data.toDateString() === checkInDate.toDateString()) ||
+                    (tipoDataSelecionada === "checkout" &&
+                      checkOutDate &&
+                      data.toDateString() === checkOutDate.toDateString());
+
+                  const isCheckInDate =
+                    checkInDate &&
+                    data.toDateString() === checkInDate.toDateString();
+
+                  const isDisabled =
+                    tipoDataSelecionada === "checkout" &&
+                    checkInDate &&
+                    data < checkInDate;
+
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.diaButton,
+                        isSelected && styles.diaButtonSelected,
+                        isCheckInDate && styles.diaButtonCheckIn,
+                        isDisabled && styles.diaButtonDisabled,
+                      ]}
+                      onPress={() => !isDisabled && selecionarData(data)}
+                      disabled={isDisabled}
+                    >
+                      <Text
+                        style={[
+                          styles.diaSemana,
+                          isSelected && styles.diaTextoSelected,
+                        ]}
+                      >
+                        {data.toLocaleDateString("pt-BR", {
+                          weekday: "short",
+                        })}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.diaNumero,
+                          isSelected && styles.diaTextoSelected,
+                        ]}
+                      >
+                        {data.getDate()}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.diaMes,
+                          isSelected && styles.diaTextoSelected,
+                        ]}
+                      >
+                        {data.toLocaleDateString("pt-BR", { month: "short" })}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const ModalDetalhes = () => {
     if (!produtoSelecionado) return null;
 
@@ -499,6 +645,51 @@ export default function HospedagensScreen() {
                   </Text>
                 </View>
 
+                {/* Seção de seleção de datas */}
+                <View style={styles.datasContainer}>
+                  <Text style={styles.datasTitulo}>
+                    Selecione as datas da sua estadia
+                  </Text>
+
+                  <View style={styles.datasRow}>
+                    <View style={styles.dataCampo}>
+                      <Text style={styles.dataLabel}>Check-in</Text>
+                      <TouchableOpacity
+                        style={styles.dataButton}
+                        onPress={() => abrirCalendario("checkin")}
+                      >
+                        <Feather name="calendar" size={16} color="#584128" />
+                        <Text style={styles.dataButtonText}>
+                          {formatarDataBR(checkInDate)}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.dataCampo}>
+                      <Text style={styles.dataLabel}>Check-out</Text>
+                      <TouchableOpacity
+                        style={styles.dataButton}
+                        onPress={() => abrirCalendario("checkout")}
+                      >
+                        <Feather name="calendar" size={16} color="#584128" />
+                        <Text style={styles.dataButtonText}>
+                          {formatarDataBR(checkOutDate)}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {diasEstadia > 0 && (
+                    <View style={styles.diasEstadiaContainer}>
+                      <Feather name="moon" size={16} color="#584128" />
+                      <Text style={styles.diasEstadiaText}>
+                        {diasEstadia} {diasEstadia === 1 ? "diária" : "diárias"}{" "}
+                        de estadia
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
                 <View style={styles.infoRow}>
                   <Feather name="tag" size={18} color="#584128" />
                   <Text style={styles.infoText}>
@@ -522,51 +713,20 @@ export default function HospedagensScreen() {
                   </Text>
                 </View>
 
-                <View style={styles.quantidadeContainer}>
-                  <Text style={styles.quantidadeLabel}>
-                    Quantidade de diárias:
-                  </Text>
-                  <View style={styles.quantidadeSelector}>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setQuantidadeSelecionada(
-                          Math.max(1, quantidadeSelecionada - 1),
-                        )
-                      }
-                      style={styles.quantidadeBtn}
-                    >
-                      <Feather name="minus" size={20} color="#584128" />
-                    </TouchableOpacity>
-                    <Text style={styles.quantidadeValor}>
-                      {quantidadeSelecionada}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() =>
-                        setQuantidadeSelecionada(
-                          Math.min(
-                            produtoSelecionado.quantidade_estoque,
-                            quantidadeSelecionada + 1,
-                          ),
-                        )
-                      }
-                      style={styles.quantidadeBtn}
-                    >
-                      <Feather name="plus" size={20} color="#584128" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
                 <View style={styles.totalContainerModal}>
                   <Text style={styles.totalLabel}>Total da estadia:</Text>
                   <Text style={styles.totalValor}>
                     {formatarPreco(
-                      produtoSelecionado.preco * quantidadeSelecionada,
+                      produtoSelecionado.preco * (diasEstadia || 0),
                     )}
                   </Text>
                 </View>
 
                 <TouchableOpacity
-                  style={styles.btnAdicionarCarrinho}
+                  style={[
+                    styles.btnAdicionarCarrinho,
+                    (!checkInDate || !checkOutDate) && styles.btnDesabilitado,
+                  ]}
                   onPress={adicionarAoCarrinho}
                 >
                   <Feather name="shopping-cart" size={20} color="#FFF" />
@@ -668,6 +828,7 @@ export default function HospedagensScreen() {
       />
 
       <ModalDetalhes />
+      <ModalCalendario />
 
       <Modal visible={modalLoginVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -892,23 +1053,128 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   descricaoTexto: { fontSize: 14, color: "#555", lineHeight: 20 },
-  quantidadeContainer: {
+
+  // Novos estilos para datas
+  datasContainer: {
+    backgroundColor: "#FFF",
+    padding: 16,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  datasTitulo: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#584128",
+    marginBottom: 12,
+  },
+  datasRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  dataCampo: {
+    flex: 1,
+  },
+  dataLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+  },
+  dataButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#584128",
+    borderRadius: 6,
+    padding: 10,
+    backgroundColor: "#F9F6F0",
+  },
+  dataButtonText: {
+    fontSize: 12,
+    color: "#333",
+    flex: 1,
+  },
+  diasEstadiaContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#EEE",
+  },
+  diasEstadiaText: {
+    fontSize: 14,
+    color: "#584128",
+    fontWeight: "bold",
+  },
+
+  // Estilos do calendário
+  calendarioContainer: {
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: "80%",
+    padding: 20,
+  },
+  calendarioHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: "#EEE",
-    paddingTop: 12,
+    marginBottom: 20,
   },
-  quantidadeLabel: { fontSize: 14, color: "#333" },
-  quantidadeSelector: { flexDirection: "row", alignItems: "center", gap: 12 },
-  quantidadeBtn: {
+  calendarioTitulo: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  calendarioGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  diaButton: {
+    width: "30%",
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#584128",
-    borderRadius: 4,
-    padding: 4,
+    borderColor: "#E0E0E0",
+    alignItems: "center",
+    backgroundColor: "#F9F6F0",
+    marginBottom: 10,
   },
-  quantidadeValor: { fontSize: 16, fontWeight: "bold" },
+  diaButtonSelected: {
+    backgroundColor: "#584128",
+    borderColor: "#584128",
+  },
+  diaButtonCheckIn: {
+    backgroundColor: "#8B6914",
+    borderColor: "#8B6914",
+  },
+  diaButtonDisabled: {
+    opacity: 0.4,
+  },
+  diaSemana: {
+    fontSize: 11,
+    color: "#666",
+    marginBottom: 4,
+  },
+  diaNumero: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 4,
+  },
+  diaMes: {
+    fontSize: 11,
+    color: "#666",
+  },
+  diaTextoSelected: {
+    color: "#FFF",
+  },
+
   totalContainerModal: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -925,6 +1191,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
     marginTop: 10,
+  },
+  btnDesabilitado: {
+    opacity: 0.5,
   },
   btnAdicionarText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
   pagination: {

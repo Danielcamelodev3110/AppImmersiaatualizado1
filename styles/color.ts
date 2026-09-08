@@ -8,7 +8,9 @@ export const colors = {
   text: '#333',
   border: '#ddd',
   white: '#fff',
+  
 };
+
 
 // No RegisterScreen, importe e use:
 // import { colors } from '../styles/color';

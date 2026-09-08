@@ -16,6 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useCarrinho } from "../../../constants/CarrinhoContext"; // ajuste o caminho conforme sua estrutura
+import { produtoService } from "../../../services/ProdutoService"; // ajuste o caminho se necessário
 
 interface Experiencia {
   id: number;
@@ -64,8 +66,9 @@ const normalizarImagens = (imagemUrl: any): string[] => {
 
 export default function ExperienciasScreen() {
   const router = useRouter();
+  const { itens: carrinho, adicionarAoCarrinho: adicionarNoContexto } =
+    useCarrinho();
   const [favoritos, setFavoritos] = useState<number[]>([]);
-  const [carrinho, setCarrinho] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalLoginVisible, setModalLoginVisible] = useState(false);
@@ -83,44 +86,26 @@ export default function ExperienciasScreen() {
 
   const itensPorPagina = 6;
 
-  const carregarCarrinho = async () => {
-    try {
-      const userId = await AsyncStorage.getItem("userId");
-      if (userId) {
-        const carrinhoSalvo = await AsyncStorage.getItem(`carrinho_${userId}`);
-        if (carrinhoSalvo) setCarrinho(JSON.parse(carrinhoSalvo));
-      }
-    } catch (error) {
-      console.error("Erro ao carregar carrinho:", error);
-    }
-  };
+  const obterIdentificadorUsuario = async (): Promise<string | null> => {
+    const userId = await AsyncStorage.getItem("userId");
+    if (userId) return userId;
 
-  const salvarCarrinho = async (novoCarrinho: any[]) => {
-    try {
-      const userId = await AsyncStorage.getItem("userId");
-      if (userId) {
-        await AsyncStorage.setItem(
-          `carrinho_${userId}`,
-          JSON.stringify(novoCarrinho),
-        );
-        setCarrinho(novoCarrinho);
-      }
-    } catch (error) {
-      console.error("Erro ao salvar carrinho:", error);
+    const token = await AsyncStorage.getItem("@Immersia:token");
+    if (token) {
+      await AsyncStorage.setItem("userId", token);
+      return token;
     }
+
+    return null;
   };
 
   const buscarExperiencias = async () => {
     try {
       setCarregandoAPI(true);
-      const response = await fetch("http://localhost:3000/produtos", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
 
-      if (!response.ok) throw new Error("Erro ao buscar experiências");
+      // Usando o mesmo serviço que a hospedagem
+      const data = await produtoService.findAll();
 
-      const data = await response.json();
       const experienciasFiltradas = data
         .filter((produto: any) => produto.tipo_produto === "experiencia")
         .map((produto: any) => ({
@@ -141,7 +126,7 @@ export default function ExperienciasScreen() {
 
   const carregarFavoritos = async () => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const favoritosSalvos = await AsyncStorage.getItem(
           `favoritos_experiencias_${userId}`,
@@ -157,13 +142,11 @@ export default function ExperienciasScreen() {
     useCallback(() => {
       buscarExperiencias();
       carregarFavoritos();
-      carregarCarrinho();
     }, []),
   );
 
   useEffect(() => {
     carregarFavoritos();
-    carregarCarrinho();
   }, []);
 
   const verificarLogin = async (
@@ -183,7 +166,7 @@ export default function ExperienciasScreen() {
     if (!isLoggedIn) return;
 
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const novosFavoritos = [...favoritos, id];
         setFavoritos(novosFavoritos);
@@ -200,7 +183,7 @@ export default function ExperienciasScreen() {
 
   const removerFavorito = async (id: number) => {
     try {
-      const userId = await AsyncStorage.getItem("userId");
+      const userId = await obterIdentificadorUsuario();
       if (userId) {
         const novosFavoritos = favoritos.filter((favId) => favId !== id);
         setFavoritos(novosFavoritos);
@@ -225,32 +208,16 @@ export default function ExperienciasScreen() {
       return;
     }
 
-    const itemExistente = carrinho.find(
-      (item) => item.id === produtoSelecionado.id,
+    adicionarNoContexto(
+      {
+        id: produtoSelecionado.id,
+        nome: produtoSelecionado.nome,
+        preco: produtoSelecionado.preco,
+        imagem_url: produtoSelecionado.imagem_url?.[0],
+        tipo_produto: "experiencia",
+      },
+      quantidadeSelecionada,
     );
-    let novoCarrinho;
-
-    if (itemExistente) {
-      novoCarrinho = carrinho.map((item) =>
-        item.id === produtoSelecionado.id
-          ? { ...item, quantidade: item.quantidade + quantidadeSelecionada }
-          : item,
-      );
-    } else {
-      novoCarrinho = [
-        ...carrinho,
-        {
-          id: produtoSelecionado.id,
-          nome: produtoSelecionado.nome,
-          preco: produtoSelecionado.preco,
-          quantidade: quantidadeSelecionada,
-          imagem: produtoSelecionado.imagem_url?.[0] || null,
-          tipo: "experiencia",
-        },
-      ];
-    }
-
-    await salvarCarrinho(novoCarrinho);
 
     Alert.alert(
       "Carrinho",
@@ -264,7 +231,7 @@ export default function ExperienciasScreen() {
           text: "Ver Carrinho",
           onPress: () => {
             setModalDetalhesVisible(false);
-            router.push("/carrinho");
+            router.push("../carrinho");
           },
         },
       ],
@@ -338,9 +305,7 @@ export default function ExperienciasScreen() {
         )}
         <View style={styles.cardContent}>
           <View style={styles.cardText}>
-            <Text style={styles.cardPrice}>
-              {formatarPreco(item.preco)} ({item.quantidade_estoque} dias)
-            </Text>
+            <Text style={styles.cardPrice}>{formatarPreco(item.preco)}</Text>
             <Text style={styles.cardTitle} numberOfLines={2}>
               {item.nome}
             </Text>
@@ -351,11 +316,25 @@ export default function ExperienciasScreen() {
               </Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.cartBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              abrirDetalhes(item);
+            }}
+          >
+            <Feather name="shopping-cart" size={18} color="#584128" />
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.favoriteBtn}
-            onPress={() =>
-              isFavorito ? removerFavorito(item.id) : adicionarFavorito(item.id)
-            }
+            onPress={(e) => {
+              e.stopPropagation();
+              isFavorito
+                ? removerFavorito(item.id)
+                : adicionarFavorito(item.id);
+            }}
           >
             <Feather
               name="heart"
@@ -722,7 +701,6 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 12, paddingBottom: 20 },
   gridRow: { justifyContent: "space-between", marginBottom: 16 },
 
-  // Customização CSS baseada na Imagem enviada
   card: {
     flex: 0.48,
     backgroundColor: "#E4D5BE",
@@ -757,7 +735,7 @@ const styles = StyleSheet.create({
   },
   multiImageText: { color: "#FFF", fontSize: 10, fontWeight: "bold" },
   cardContent: { padding: 12, position: "relative" },
-  cardText: { paddingRight: 28 },
+  cardText: { paddingRight: 56 },
   cardPrice: {
     fontSize: 13,
     color: "#4A3B2C",
@@ -777,6 +755,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   locationText: { fontSize: 12, color: "#8B8272", marginLeft: 4 },
+  cartBtn: {
+    position: "absolute",
+    right: 40,
+    bottom: 14,
+    width: 30,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   favoriteBtn: {
     position: "absolute",
     right: 12,

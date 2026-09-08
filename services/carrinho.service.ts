@@ -19,7 +19,7 @@ export interface ItemCarrinho {
     preco: number;
     imagem_url: string;
     quantidade_estoque: number;
-    status: string;
+    status: string; 
   };
 }
 

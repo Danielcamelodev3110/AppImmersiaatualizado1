@@ -49,6 +49,7 @@ export default ({ config }) => ({
       ],
       "expo-secure-store",
       ["expo-build-properties", { android: { usesCleartextTraffic: true } }],
+      "@react-native-community/datetimepicker",
     ],
     experiments: {
       typedRoutes: true,

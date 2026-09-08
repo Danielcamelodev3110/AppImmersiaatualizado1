@@ -9,6 +9,8 @@ import React, {
 // Formato mínimo do produto que o carrinho precisa conhecer.
 // Ajuste os campos aqui se o seu ProdutoResponse tiver nomes diferentes.
 export interface ProdutoCarrinho {
+  data_checkin: string | undefined;
+  data_checkout: string | undefined;
   id: number;
   nome: string;
   preco: number;
