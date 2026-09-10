@@ -16,8 +16,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useCarrinho } from "../../../constants/CarrinhoContext"; // ajuste o caminho conforme sua estrutura
-import { produtoService } from "../../../services/ProdutoService"; // ajuste o caminho se necessário
+import { useCarrinho } from "../../../constants/CarrinhoContext";
+import { produtoService } from "../../../services/ProdutoService";
 
 interface Hospedagem {
   id: number;
@@ -30,6 +30,8 @@ interface Hospedagem {
   tipo_produto: string;
   imagem_url: string[];
   id_cliente_produto: number;
+  data_checkin?: string;
+  data_checkout?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -64,6 +66,15 @@ const normalizarImagens = (imagemUrl: any): string[] => {
   return [];
 };
 
+// Função helper para formatar Date -> "YYYY-MM-DD"
+const formatarDataISO = (date: Date | null): string | undefined => {
+  if (!date) return undefined;
+  const ano = date.getFullYear();
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const dia = String(date.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+};
+
 export default function HospedagensScreen() {
   const router = useRouter();
   const { itens: carrinho, adicionarAoCarrinho: adicionarNoContexto } =
@@ -84,7 +95,7 @@ export default function HospedagensScreen() {
     "favorito",
   );
 
-  // Novos estados para datas
+  // Estados para datas
   const [checkInDate, setCheckInDate] = useState<Date | null>(null);
   const [checkOutDate, setCheckOutDate] = useState<Date | null>(null);
   const [modalCalendarioVisible, setModalCalendarioVisible] = useState(false);
@@ -92,6 +103,9 @@ export default function HospedagensScreen() {
     "checkin" | "checkout" | null
   >(null);
   const [diasEstadia, setDiasEstadia] = useState(0);
+
+  // 👇 MOVIDO PARA O COMPONENTE PAI (evita violação das regras dos Hooks)
+  const [localImageIndex, setLocalImageIndex] = useState(0);
 
   const itensPorPagina = 6;
 
@@ -190,7 +204,6 @@ export default function HospedagensScreen() {
     const mesAtual = hoje.getMonth();
     const dias = [];
 
-    // Gerar próximos 60 dias para seleção
     for (let i = 0; i < 60; i++) {
       const data = new Date(anoAtual, mesAtual, hoje.getDate() + i);
       dias.push(data);
@@ -207,7 +220,6 @@ export default function HospedagensScreen() {
   const selecionarData = (data: Date) => {
     if (tipoDataSelecionada === "checkin") {
       setCheckInDate(data);
-      // Se a data de checkout for anterior à nova data de check-in, limpar
       if (checkOutDate && data >= checkOutDate) {
         setCheckOutDate(null);
       }
@@ -266,12 +278,12 @@ export default function HospedagensScreen() {
     }
   };
 
+  // 👇 FUNÇÃO PRINCIPAL CORRIGIDA - agora envia as datas
   const adicionarAoCarrinho = async () => {
     const isLoggedIn = await verificarLogin("carrinho");
     if (!isLoggedIn) return;
     if (!produtoSelecionado) return;
 
-    // Verificar se as datas foram selecionadas
     if (!checkInDate || !checkOutDate) {
       Alert.alert("Erro", "Selecione as datas de check-in e check-out");
       return;
@@ -288,6 +300,10 @@ export default function HospedagensScreen() {
       return;
     }
 
+    // 👇 Formata as datas para o padrão do backend (YYYY-MM-DD)
+    const dataCheckInISO = formatarDataISO(checkInDate);
+    const dataCheckOutISO = formatarDataISO(checkOutDate);
+
     adicionarNoContexto(
       {
         id: produtoSelecionado.id,
@@ -295,6 +311,8 @@ export default function HospedagensScreen() {
         preco: produtoSelecionado.preco,
         imagem_url: produtoSelecionado.imagem_url?.[0],
         tipo_produto: "hospedagem",
+        data_checkin: dataCheckInISO,
+        data_checkout: dataCheckOutISO,
       },
       dias,
     );
@@ -322,7 +340,6 @@ export default function HospedagensScreen() {
     const isLoggedIn = await verificarLogin("carrinho");
     if (!isLoggedIn) return;
 
-    // Abrir modal de detalhes para seleção de datas
     abrirDetalhes(item);
     Alert.alert(
       "Atenção",
@@ -335,6 +352,7 @@ export default function HospedagensScreen() {
     setQuantidadeSelecionada(1);
     setCheckInDate(null);
     setCheckOutDate(null);
+    setLocalImageIndex(0); // 👈 resetar índice da imagem
     setModalDetalhesVisible(true);
   };
 
@@ -545,7 +563,6 @@ export default function HospedagensScreen() {
 
     const images = produtoSelecionado.imagem_url || [];
     const hasMultipleImages = images.length > 1;
-    const [localImageIndex, setLocalImageIndex] = useState(0);
 
     const currentImage =
       images.length > 0
@@ -645,7 +662,6 @@ export default function HospedagensScreen() {
                   </Text>
                 </View>
 
-                {/* Seção de seleção de datas */}
                 <View style={styles.datasContainer}>
                   <Text style={styles.datasTitulo}>
                     Selecione as datas da sua estadia
@@ -1054,7 +1070,6 @@ const styles = StyleSheet.create({
   },
   descricaoTexto: { fontSize: 14, color: "#555", lineHeight: 20 },
 
-  // Novos estilos para datas
   datasContainer: {
     backgroundColor: "#FFF",
     padding: 16,
@@ -1072,14 +1087,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
-  dataCampo: {
-    flex: 1,
-  },
-  dataLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
-  },
+  dataCampo: { flex: 1 },
+  dataLabel: { fontSize: 12, color: "#666", marginBottom: 4 },
   dataButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1090,11 +1099,7 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: "#F9F6F0",
   },
-  dataButtonText: {
-    fontSize: 12,
-    color: "#333",
-    flex: 1,
-  },
+  dataButtonText: { fontSize: 12, color: "#333", flex: 1 },
   diasEstadiaContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1104,13 +1109,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#EEE",
   },
-  diasEstadiaText: {
-    fontSize: 14,
-    color: "#584128",
-    fontWeight: "bold",
-  },
+  diasEstadiaText: { fontSize: 14, color: "#584128", fontWeight: "bold" },
 
-  // Estilos do calendário
   calendarioContainer: {
     backgroundColor: "#FFF",
     borderTopLeftRadius: 20,
@@ -1124,11 +1124,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  calendarioTitulo: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-  },
+  calendarioTitulo: { fontSize: 18, fontWeight: "bold", color: "#333" },
   calendarioGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1145,35 +1141,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#F9F6F0",
     marginBottom: 10,
   },
-  diaButtonSelected: {
-    backgroundColor: "#584128",
-    borderColor: "#584128",
-  },
-  diaButtonCheckIn: {
-    backgroundColor: "#8B6914",
-    borderColor: "#8B6914",
-  },
-  diaButtonDisabled: {
-    opacity: 0.4,
-  },
-  diaSemana: {
-    fontSize: 11,
-    color: "#666",
-    marginBottom: 4,
-  },
+  diaButtonSelected: { backgroundColor: "#584128", borderColor: "#584128" },
+  diaButtonCheckIn: { backgroundColor: "#8B6914", borderColor: "#8B6914" },
+  diaButtonDisabled: { opacity: 0.4 },
+  diaSemana: { fontSize: 11, color: "#666", marginBottom: 4 },
   diaNumero: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#333",
     marginBottom: 4,
   },
-  diaMes: {
-    fontSize: 11,
-    color: "#666",
-  },
-  diaTextoSelected: {
-    color: "#FFF",
-  },
+  diaMes: { fontSize: 11, color: "#666" },
+  diaTextoSelected: { color: "#FFF" },
 
   totalContainerModal: {
     flexDirection: "row",
@@ -1192,9 +1171,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 10,
   },
-  btnDesabilitado: {
-    opacity: 0.5,
-  },
+  btnDesabilitado: { opacity: 0.5 },
   btnAdicionarText: { color: "#FFF", fontWeight: "bold", fontSize: 16 },
   pagination: {
     flexDirection: "row",
@@ -1202,11 +1179,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 16,
   },
-  pageButton: {
-    padding: 10,
-    backgroundColor: "#FFF",
-    borderRadius: 30,
-  },
+  pageButton: { padding: 10, backgroundColor: "#FFF", borderRadius: 30 },
   pageButtonActive: { backgroundColor: "#584128" },
   pageText: { color: "#584128" },
   pageTextActive: { color: "#FFF" },

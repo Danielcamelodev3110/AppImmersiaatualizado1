@@ -1,130 +1,65 @@
-import { Platform } from "react-native";
+import { Timestamp } from "react-native-reanimated/lib/typescript/commonTypes";
 
-// 👇 Mesma lógica de detecção de ambiente usada no userService.ts e no
-// produtoService.ts. Se você já centralizou isso em um arquivo compartilhado
-// (ex: config/api.ts), importe de lá em vez de duplicar aqui.
-const getBaseUrl = () => {
-  if (__DEV__) {
-    if (Platform.OS === "web") {
-      return "https://back-immercia.onrender.com";
-    }
-    if (Platform.OS === "android") {
-      return "https://back-immercia.onrender.com";
-    }
-    return "https://back-immercia.onrender.com"; // Seu IP do Ethernet
-  }
-  return "https://back-immercia.onrender.com"; // Fallback caso não esteja em __DEV__
-};
+const BASE_URL = "https://back-immercia.onrender.com";
 
-const BASE_URL = getBaseUrl();
+export type FormaPagamento =
+  | "pix"
+  | "cartao_credito"
+  | "cartao_debito"
+  | "boleto";
 
-export type StatusReserva =
-  | "pendente"
-  | "confirmada"
-  | "cancelada"
-  | "concluida";
-
-export type FormaPagamento = "cartao" | "pix" | "boleto" | "dinheiro";
-
-// Payload enviado para criar a compra. O preço total é calculado no
-// backend a partir do produto — não precisa (e não deve) mandar preco_total.
 export interface CreateReservaPayload {
   id_cliente: number;
   id_produto: number;
-  quantidade?: number;
-  data_checkin?: string; // ISO string, ex: "2026-08-20"
-  data_checkout?: string;
+  quantidade?: number; // padrão 1 se não enviado
+  data_checkin?: string; // "AAAA-MM-DD" — obrigatório pra hospedagem
+  data_checkout?: string; // "AAAA-MM-DD" — obrigatório pra hospedagem
   forma_pagamento?: FormaPagamento;
   observacoes?: string;
 }
 
-export interface ReservaResponse {
+export interface Reserva {
   id: number;
-  data_reserva: string;
-  data_checkin?: string | null;
-  data_checkout?: string | null;
-  quantidade: number;
-  preco_total: string; // vem como string do Postgres (numeric/decimal)
-  status: StatusReserva;
-  forma_pagamento?: FormaPagamento | null;
-  codigo_reserva: string;
-  observacoes?: string | null;
   id_cliente: number;
   id_produto: number;
-  produto?: any;
-  cliente?: any;
+  quantidade: number;
+  preco_total: number;
+  status: "pendente" | "confirmada" | "cancelada" | "concluida";
+  forma_pagamento: string | null;
+  codigo_reserva: string;
+  data_checkin: Timestamp;
+  data_checkout: Timestamp;
+  data_reserva: string;
+  observacoes: string | null;
 }
 
 export const reservaService = {
-  // Realiza a compra do produto
-  create: async (
-    dadosReserva: CreateReservaPayload,
-  ): Promise<ReservaResponse> => {
+  // Cria uma reserva (o backend calcula o preco_total a partir do preço
+  // atual do produto, nunca confia num valor vindo do front)
+  create: async (dados: CreateReservaPayload): Promise<Reserva> => {
     try {
       const response = await fetch(`${BASE_URL}/reservas`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dadosReserva),
+        body: JSON.stringify(dados),
       });
 
-      const dados = await response.json();
+      const dadosResposta = await response.json();
 
       if (!response.ok) {
         const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
+        (erroInstancia as any).response = { data: dadosResposta };
         throw erroInstancia;
       }
 
-      return dados;
+      return dadosResposta;
     } catch (error: any) {
       throw error;
     }
   },
 
-  findAll: async (): Promise<ReservaResponse[]> => {
-    try {
-      const response = await fetch(`${BASE_URL}/reservas`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const dados = await response.json();
-
-      if (!response.ok) {
-        const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
-        throw erroInstancia;
-      }
-
-      return dados;
-    } catch (error: any) {
-      throw error;
-    }
-  },
-
-  findOne: async (id: number): Promise<ReservaResponse> => {
-    try {
-      const response = await fetch(`${BASE_URL}/reservas/${id}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const dados = await response.json();
-
-      if (!response.ok) {
-        const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
-        throw erroInstancia;
-      }
-
-      return dados;
-    } catch (error: any) {
-      throw error;
-    }
-  },
-
-  // Histórico de compras do cliente logado
-  findMinhasCompras: async (idCliente: number): Promise<ReservaResponse[]> => {
+  // "Minhas compras"
+  findByCliente: async (idCliente: number): Promise<Reserva[]> => {
     try {
       const response = await fetch(
         `${BASE_URL}/reservas/minhas-compras/${idCliente}`,
@@ -137,83 +72,11 @@ export const reservaService = {
       const dados = await response.json();
 
       if (!response.ok) {
-        const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
-        throw erroInstancia;
+        throw new Error("Erro ao buscar reservas.");
       }
 
       return dados;
-    } catch (error: any) {
-      throw error;
-    }
-  },
-
-  // Reservas recebidas nos produtos de um anfitrião
-  findRecebidas: async (idAnfitriao: number): Promise<ReservaResponse[]> => {
-    try {
-      const response = await fetch(
-        `${BASE_URL}/reservas/recebidas/${idAnfitriao}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-
-      const dados = await response.json();
-
-      if (!response.ok) {
-        const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
-        throw erroInstancia;
-      }
-
-      return dados;
-    } catch (error: any) {
-      throw error;
-    }
-  },
-
-  // Ex: confirmar, cancelar, concluir
-  updateStatus: async (
-    id: number,
-    status: StatusReserva,
-  ): Promise<ReservaResponse> => {
-    try {
-      const response = await fetch(`${BASE_URL}/reservas/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-
-      const dados = await response.json();
-
-      if (!response.ok) {
-        const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
-        throw erroInstancia;
-      }
-
-      return dados;
-    } catch (error: any) {
-      throw error;
-    }
-  },
-
-  remove: async (id: number): Promise<void> => {
-    try {
-      const response = await fetch(`${BASE_URL}/reservas/${id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      const dados = await response.json();
-
-      if (!response.ok) {
-        const erroInstancia = new Error();
-        (erroInstancia as any).response = { data: dados };
-        throw erroInstancia;
-      }
-    } catch (error: any) {
+    } catch (error) {
       throw error;
     }
   },
