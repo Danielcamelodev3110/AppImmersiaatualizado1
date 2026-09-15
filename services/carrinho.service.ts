@@ -12,6 +12,7 @@ export interface ItemCarrinho {
   data_criacao: string;
   data_atualizacao: string;
   preco_total: number;
+  taxa_plataforma: number;
   produtos: {
     id: number;
     nome: string;
@@ -27,6 +28,8 @@ export interface CarrinhoResponse {
   itens: ItemCarrinho[];
   total: number;
 }
+
+
 
 export const carrinhoService = {
   adicionar: async (dadosCarrinho: AdicionarAoCarrinhoPayload) => {

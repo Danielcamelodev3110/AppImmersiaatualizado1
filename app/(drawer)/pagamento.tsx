@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,12 @@ import {
 } from "react-native";
 
 import { useCarrinho } from "../../constants/CarrinhoContext"; // ajuste o caminho conforme sua estrutura
+import {
+  TAXA_PLATAFORMA_DESCRICAO,
+  TAXA_PLATAFORMA_LABEL,
+  aplicarTaxaPlataforma,
+  calcularTaxaPlataforma,
+} from "../../constants/taxas";
 
 import { pagamentoService } from "../../services/PagamentoService";
 import { FormaPagamento, reservaService } from "../../services/reservaService";
@@ -37,11 +44,23 @@ const formatarDataISOParaBR = (dataISO?: string | null): string => {
   return `${dia}/${mes}/${ano}`;
 };
 
+const formatarMoeda = (valor: number): string =>
+  `R$ ${valor.toFixed(2).replace(".", ",")}`;
+
 export default function Pagamento() {
   const { itens, totalPreco, limparCarrinho } = useCarrinho();
   const [formaSelecionada, setFormaSelecionada] =
     useState<FormaPagamento | null>(null);
   const [processando, setProcessando] = useState(false);
+
+  // 👇 NOVO: controla o modal de detalhamento do pedido
+  const [modalDetalhamentoVisible, setModalDetalhamentoVisible] =
+    useState(false);
+
+  // 👇 NOVO: taxa da plataforma/aplicativo (8%) calculada sobre o
+  // subtotal do carrinho, e total final que o cliente efetivamente paga
+  const taxaAplicativo = calcularTaxaPlataforma(totalPreco);
+  const totalComTaxa = totalPreco + taxaAplicativo;
 
   const handleConfirmarPagamento = async () => {
     if (itens.length === 0) {
@@ -94,12 +113,16 @@ export default function Pagamento() {
         reservasCriadas.push(reserva);
       }
 
-      // Cria o pagamento (simulado, aprovado na hora) pra cada reserva
+      // Cria o pagamento (simulado, aprovado na hora) pra cada reserva.
+      // 👇 NOVO: o valor enviado inclui a taxa do aplicativo (8%) em
+      // cima do preco_total de cada reserva — é isso que faz a taxa
+      // ser cobrada de verdade, já que o backend salva exatamente o
+      // "valor" que a gente manda aqui, sem recalcular nada.
       await Promise.all(
         reservasCriadas.map((reserva) =>
           pagamentoService.create({
             id_reserva: reserva.id,
-            valor: reserva.preco_total,
+            valor: aplicarTaxaPlataforma(reserva.preco_total),
             forma_pagamento: formaSelecionada,
           }),
         ),
@@ -128,6 +151,68 @@ export default function Pagamento() {
       setProcessando(false);
     }
   };
+
+  // ===== MODAL DE DETALHAMENTO (NOVO) =====
+  const ModalDetalhamento = () => (
+    <Modal
+      visible={modalDetalhamentoVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setModalDetalhamentoVisible(false)}
+    >
+      <View style={styles.modalDetalheOverlay}>
+        <View style={styles.modalDetalheContainer}>
+          <View style={styles.modalDetalheHeader}>
+            <Text style={styles.modalDetalheTitulo}>
+              Detalhamento do pedido
+            </Text>
+            <TouchableOpacity
+              onPress={() => setModalDetalhamentoVisible(false)}
+            >
+              <Feather name="x" size={22} color="#584128" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalDetalheLinha}>
+            <Text style={styles.modalDetalheLabel}>Subtotal</Text>
+            <Text style={styles.modalDetalheValor}>
+              {formatarMoeda(totalPreco)}
+            </Text>
+          </View>
+
+          <View style={styles.modalDetalheLinha}>
+            <Text style={styles.modalDetalheLabel}>
+              {TAXA_PLATAFORMA_LABEL}
+            </Text>
+            <Text style={styles.modalDetalheValor}>
+              {formatarMoeda(taxaAplicativo)}
+            </Text>
+          </View>
+
+          {/* 👇 explicação de que é taxa do aplicativo/empresa */}
+          <Text style={styles.modalDetalheExplicacao}>
+            {TAXA_PLATAFORMA_DESCRICAO}
+          </Text>
+
+          <View style={styles.modalDetalheDivisor} />
+
+          <View style={styles.modalDetalheLinha}>
+            <Text style={styles.modalDetalheTotalLabel}>Total</Text>
+            <Text style={styles.modalDetalheTotalValor}>
+              {formatarMoeda(totalComTaxa)}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.modalDetalheBotaoFechar}
+            onPress={() => setModalDetalhamentoVisible(false)}
+          >
+            <Text style={styles.modalDetalheBotaoFecharText}>Entendi</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (itens.length === 0) {
     return (
@@ -190,10 +275,34 @@ export default function Pagamento() {
           })}
 
           <View style={styles.totalLinha}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValor}>
-              R$ {totalPreco.toFixed(2).replace(".", ",")}
+            <Text style={styles.totalLabel}>Subtotal</Text>
+            <Text style={styles.totalValorSecundario}>
+              {formatarMoeda(totalPreco)}
             </Text>
+          </View>
+
+          {/* 👇 NOVO: linha da taxa do aplicativo */}
+          <View style={styles.totalLinha}>
+            <Text style={styles.totalLabel}>{TAXA_PLATAFORMA_LABEL}</Text>
+            <Text style={styles.totalValorSecundario}>
+              {formatarMoeda(taxaAplicativo)}
+            </Text>
+          </View>
+
+          {/* 👇 NOVO: botão de detalhamento, explicando a taxa da empresa */}
+          <TouchableOpacity
+            style={styles.btnDetalhamento}
+            onPress={() => setModalDetalhamentoVisible(true)}
+          >
+            <Feather name="info" size={14} color="#584128" />
+            <Text style={styles.btnDetalhamentoText}>
+              Ver detalhamento do pedido
+            </Text>
+          </TouchableOpacity>
+
+          <View style={[styles.totalLinha, styles.totalLinhaFinal]}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValor}>{formatarMoeda(totalComTaxa)}</Text>
           </View>
         </View>
 
@@ -254,11 +363,13 @@ export default function Pagamento() {
             <ActivityIndicator color="#FFF" />
           ) : (
             <Text style={styles.botaoConfirmarTexto}>
-              Confirmar pagamento · R$ {totalPreco.toFixed(2).replace(".", ",")}
+              Confirmar pagamento · {formatarMoeda(totalComTaxa)}
             </Text>
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <ModalDetalhamento />
     </SafeAreaView>
   );
 }
@@ -299,13 +410,33 @@ const styles = StyleSheet.create({
   totalLinha: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 12,
+    marginTop: 8,
+  },
+  // 👇 NOVO: linha final (Total) com separador acima, igual antes
+  totalLinhaFinal: {
     paddingTop: 12,
+    marginTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#DDD",
   },
-  totalLabel: { fontSize: 16, fontWeight: "bold", color: "#333" },
+  totalLabel: { fontSize: 14, color: "#333" },
+  totalValorSecundario: { fontSize: 14, fontWeight: "600", color: "#584128" },
   totalValor: { fontSize: 18, fontWeight: "bold", color: "#584128" },
+  // 👇 NOVO: botão "Ver detalhamento do pedido"
+  btnDetalhamento: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  btnDetalhamentoText: {
+    fontSize: 12,
+    color: "#584128",
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
   opcaoPagamento: {
     flexDirection: "row",
     alignItems: "center",
@@ -352,4 +483,80 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   botaoVoltarTexto: { color: "#FFF", fontWeight: "600" },
+  // 👇 NOVO: estilos do modal de detalhamento (mesmo padrão do carrinho)
+  modalDetalheOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalDetalheContainer: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+  },
+  modalDetalheHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalDetalheTitulo: {
+    fontSize: 17,
+    fontWeight: "bold",
+    color: "#2c1810",
+  },
+  modalDetalheLinha: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  modalDetalheLabel: {
+    fontSize: 14,
+    color: "#2c1810",
+    flexShrink: 1,
+    paddingRight: 8,
+  },
+  modalDetalheValor: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2c1810",
+  },
+  modalDetalheExplicacao: {
+    fontSize: 12,
+    color: "#8B8272",
+    lineHeight: 18,
+    marginTop: 4,
+    marginBottom: 8,
+    fontStyle: "italic",
+  },
+  modalDetalheDivisor: {
+    height: 1,
+    backgroundColor: "#f0ebe3",
+    marginVertical: 8,
+  },
+  modalDetalheTotalLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2c1810",
+  },
+  modalDetalheTotalValor: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#584128",
+  },
+  modalDetalheBotaoFechar: {
+    backgroundColor: "#584128",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  modalDetalheBotaoFecharText: {
+    color: "#FFF",
+    fontWeight: "600",
+    fontSize: 15,
+  },
 });

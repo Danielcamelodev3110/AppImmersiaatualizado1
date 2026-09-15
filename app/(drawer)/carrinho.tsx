@@ -1,22 +1,28 @@
-// Carrinho.tsx - Conectado ao CarrinhoContext (itens reais, não mais mockados)
+// Carrinho.tsx
+import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  TextInput,
   Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Feather } from "@expo/vector-icons";
 
-// 👇 ajuste o caminho conforme a localização real do seu CarrinhoContext
+import {
+  taxa_plataforma
+} from"../../services/carrinho.service";
+
+// 👇 Importação do contexto e da taxa vinda do seu serviço
 import { useCarrinho } from "../../constants/CarrinhoContext";
 
-// ===== IMAGENS DAS RECOMENDAÇÕES (mantidas como estavam) =====
+
+// ===== IMAGENS DAS RECOMENDAÇÕES =====
 const canecaImage = require("../../assets/images/caneca.jpg");
 const portaRetratoImage = require("../../assets/images/portaretrato.jpg");
 const chaveiroImage = require("../../assets/images/tag.jpg");
@@ -29,21 +35,18 @@ interface Recomendacao {
   imagem: any;
 }
 
-// 👇 NOVO: converte "AAAA-MM-DD" (formato salvo no carrinho) pro
-// formato brasileiro "DD/MM/AAAA", só pra exibição
 const formatarDataISOParaBR = (dataISO?: string): string => {
   if (!dataISO) return "";
   const [ano, mes, dia] = dataISO.split("-");
   return `${dia}/${mes}/${ano}`;
 };
 
+const formatarMoeda = (valor: number): string =>
+  `R$ ${valor.toFixed(2).replace(".", ",")}`;
+
 const Carrinho: React.FC = () => {
   const router = useRouter();
 
-  // 👇 NOVO: itens reais do carrinho, vindos do contexto (o mesmo que a
-  // tela de hospedagens usa em "adicionarAoCarrinho"). Antes essa tela
-  // ignorava completamente o contexto e usava um array fixo — por isso
-  // nada adicionado em hospedagens aparecia aqui.
   const {
     itens,
     removerDoCarrinho,
@@ -60,6 +63,10 @@ const Carrinho: React.FC = () => {
     tipo: "",
   });
 
+  const [modalDetalhamentoVisible, setModalDetalhamentoVisible] =
+    useState(false);
+  const [loading, setLoading] = useState(false);
+
   const recomendacoes: Recomendacao[] = [
     { id: 1, nome: "Caneca Personalizada", preco: 39.9, imagem: canecaImage },
     {
@@ -72,15 +79,19 @@ const Carrinho: React.FC = () => {
     { id: 4, nome: "Blusa Personalizada", preco: 59.9, imagem: blusaImage },
   ];
 
-  // ===== FUNÇÕES =====
-  // 👇 ATUALIZADO: total agora vem direto do contexto, calculado a
-  // partir dos itens reais (preco * quantidade de cada um)
-  const calcularTotal = (): number => totalPreco;
+  // ===== CÁLCULOS UTILIZANDO A TAXA DO SERVICE =====
+  const subtotal = totalPreco;
+  const valorDesconto = (subtotal * desconto) / 100;
+  const subtotalComDesconto = subtotal - valorDesconto;
 
-  const calcularTotalComDesconto = (): number => {
-    const total = calcularTotal();
-    return total - (total * desconto) / 100;
-  };
+  // Trata a taxa vinda do service (seja decimal 0.08 ou porcentagem 8)
+  const taxaPercentual =
+    Number(taxa_plataforma) > 1
+      ? Number(taxa_plataforma) / 100
+      : Number(taxa_plataforma) || 0;
+
+  const taxaAplicativo = subtotalComDesconto * taxaPercentual;
+  const total = subtotalComDesconto + taxaAplicativo;
 
   const aplicarCupom = () => {
     const codigo = cupom.trim().toUpperCase();
@@ -123,20 +134,131 @@ const Carrinho: React.FC = () => {
     setDesconto(0);
   };
 
-  const finalizarCompra = () => {
+  // ===== FINALIZAR COMPRA & ENVIAR PARA O BACKEND =====
+  const finalizarCompra = async () => {
     if (itens.length === 0) {
       Alert.alert(
         "Carrinho vazio",
-        "Adicione itens ao carrinho antes de finalizar.",
+        "Adicione itens ao carrinho antes de finalizar."
       );
       return;
     }
-    router.push("/pagamento");
+
+    setLoading(true);
+
+    try {
+      const itemPrincipal = itens[0];
+
+      const response = await fetch("https://sua-api.com/reservas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id_cliente: "ID_DO_CLIENTE_LOGADO", // Substitua pelo ID real do usuário
+          id_produto: itemPrincipal.produto.id,
+          quantidade: itemPrincipal.quantidade,
+          data_checkin: itemPrincipal.produto.data_checkin || null,
+          data_checkout: itemPrincipal.produto.data_checkout || null,
+          observacoes: "",
+        }),
+      });
+
+      const reservaCriada = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          reservaCriada.message || "Erro ao salvar a reserva no servidor."
+        );
+      }
+
+      router.push({
+        pathname: "/pagamento",
+        params: {
+          reservaId: reservaCriada.id,
+          codigoReserva: reservaCriada.codigo_reserva,
+          taxaPlataforma: String(reservaCriada.taxa_plataforma),
+          total: String(reservaCriada.preco_total),
+        },
+      });
+    } catch (error: any) {
+      Alert.alert(
+        "Erro ao processar",
+        error.message || "Não foi possível registrar a reserva."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const total = calcularTotalComDesconto();
+  // ===== MODAL DE DETALHAMENTO =====
+  const ModalDetalhamento = () => (
+    <Modal
+      visible={modalDetalhamentoVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setModalDetalhamentoVisible(false)}
+    >
+      <View style={styles.modalDetalheOverlay}>
+        <View style={styles.modalDetalheContainer}>
+          <View style={styles.modalDetalheHeader}>
+            <Text style={styles.modalDetalheTitulo}>
+              Detalhamento do pedido
+            </Text>
+            <TouchableOpacity
+              onPress={() => setModalDetalhamentoVisible(false)}
+            >
+              <Feather name="x" size={22} color="#584128" />
+            </TouchableOpacity>
+          </View>
 
-  // ===== RENDERIZAÇÃO =====
+          <View style={styles.modalDetalheLinha}>
+            <Text style={styles.modalDetalheLabel}>Subtotal</Text>
+            <Text style={styles.modalDetalheValor}>
+              {formatarMoeda(subtotal)}
+            </Text>
+          </View>
+
+          {desconto > 0 && (
+            <View style={styles.modalDetalheLinha}>
+              <Text style={styles.modalDetalheLabel}>
+                Desconto ({cupomAplicado} · {desconto}%)
+              </Text>
+              <Text style={[styles.modalDetalheValor, styles.corDesconto]}>
+                - {formatarMoeda(valorDesconto)}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.modalDetalheLinha}>
+            <Text style={styles.modalDetalheLabel}>Taxa da Plataforma</Text>
+            <Text style={styles.modalDetalheValor}>
+              {formatarMoeda(taxaAplicativo)}
+            </Text>
+          </View>
+
+          <Text style={styles.modalDetalheExplicacao}>
+            A taxa de serviço cobre o suporte, manutenção e segurança do aplicativo.
+          </Text>
+
+          <View style={styles.modalDetalheDivisor} />
+
+          <View style={styles.modalDetalheLinha}>
+            <Text style={styles.modalDetalheTotalLabel}>Total</Text>
+            <Text style={styles.modalDetalheTotalValor}>
+              {formatarMoeda(total)}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.modalDetalheBotaoFechar}
+            onPress={() => setModalDetalhamentoVisible(false)}
+          >
+            <Text style={styles.modalDetalheBotaoFecharText}>Entendi</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -149,7 +271,7 @@ const Carrinho: React.FC = () => {
           <View style={styles.heroDivider} />
         </View>
 
-        {/* BALÃO DE ETAPAS */}
+        {/* INDICADOR DE ETAPAS */}
         <View style={styles.balaoOverlay}>
           <View style={styles.balao}>
             <View style={styles.bolinha}>
@@ -173,7 +295,7 @@ const Carrinho: React.FC = () => {
         </View>
 
         <View style={styles.gridContainer}>
-          {/* PRODUTOS */}
+          {/* LISTA DE PRODUTOS */}
           <View style={styles.produtosSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Produtos ({itens.length})</Text>
@@ -206,7 +328,6 @@ const Carrinho: React.FC = () => {
             ) : (
               <>
                 {itens.map((item) => {
-                  // 👇 só itens de hospedagem carregam essas datas
                   const temPeriodo =
                     !!item.produto.data_checkin && !!item.produto.data_checkout;
 
@@ -237,7 +358,6 @@ const Carrinho: React.FC = () => {
                           {item.produto.nome}
                         </Text>
 
-                        {/* 👇 mostra o período reservado, quando existir */}
                         {temPeriodo && (
                           <View style={styles.produtoDatasBtn}>
                             <Feather
@@ -248,11 +368,11 @@ const Carrinho: React.FC = () => {
                             <Text style={styles.produtoDatas}>
                               {" "}
                               {formatarDataISOParaBR(
-                                item.produto.data_checkin,
+                                item.produto.data_checkin
                               )}{" "}
                               até{" "}
                               {formatarDataISOParaBR(
-                                item.produto.data_checkout,
+                                item.produto.data_checkout
                               )}
                             </Text>
                           </View>
@@ -264,7 +384,7 @@ const Carrinho: React.FC = () => {
                               onPress={() =>
                                 atualizarQuantidade(
                                   item.produto.id,
-                                  Math.max(1, item.quantidade - 1),
+                                  Math.max(1, item.quantidade - 1)
                                 )
                               }
                               style={[
@@ -282,7 +402,7 @@ const Carrinho: React.FC = () => {
                               onPress={() =>
                                 atualizarQuantidade(
                                   item.produto.id,
-                                  item.quantidade + 1,
+                                  item.quantidade + 1
                                 )
                               }
                               style={styles.qtdBtn}
@@ -317,10 +437,9 @@ const Carrinho: React.FC = () => {
               </>
             )}
 
-            {/* RECOMENDAÇÕES (continuam estáticas, não fazem parte do carrinho real) */}
+            {/* RECOMENDAÇÕES */}
             <View style={styles.recomendacoes}>
               <Text style={styles.recomendacoesTitle}>
-                {" "}
                 Você também pode gostar
               </Text>
               <View style={styles.recomendacoesGrid}>
@@ -348,7 +467,7 @@ const Carrinho: React.FC = () => {
             </View>
           </View>
 
-          {/* RESUMO */}
+          {/* RESUMO DO PEDIDO */}
           <View style={styles.resumoSection}>
             <Text style={styles.resumoTitle}>Resumo do Pedido</Text>
 
@@ -356,7 +475,7 @@ const Carrinho: React.FC = () => {
               <View style={styles.resumoLinha}>
                 <Text style={styles.resumoLinhaLabel}>Subtotal</Text>
                 <Text style={styles.resumoLinhaValor}>
-                  R$ {calcularTotal().toFixed(2).replace(".", ",")}
+                  {formatarMoeda(subtotal)}
                 </Text>
               </View>
 
@@ -411,24 +530,35 @@ const Carrinho: React.FC = () => {
                 <View style={[styles.resumoLinha, styles.resumoLinhaDesconto]}>
                   <Text style={styles.resumoLinhaLabel}>Desconto</Text>
                   <Text style={styles.resumoLinhaValor}>
-                    - R${" "}
-                    {((calcularTotal() * desconto) / 100)
-                      .toFixed(2)
-                      .replace(".", ",")}
+                    - {formatarMoeda(valorDesconto)}
                   </Text>
                 </View>
               )}
 
-              <View style={styles.resumoTotal}>
-                <Text style={styles.resumoTotalLabel}>Total</Text>
-                <Text style={styles.totalValor}>
-                  R$ {total.toFixed(2).replace(".", ",")}
+              <View style={styles.resumoLinha}>
+                <Text style={styles.resumoLinhaLabel}>Taxa da Plataforma</Text>
+                <Text style={styles.resumoLinhaValor}>
+                  {formatarMoeda(taxaAplicativo)}
                 </Text>
               </View>
 
+              <TouchableOpacity
+                style={styles.btnDetalhamento}
+                onPress={() => setModalDetalhamentoVisible(true)}
+              >
+                <Feather name="info" size={14} color="#584128" />
+                <Text style={styles.btnDetalhamentoText}>
+                  Ver detalhamento do pedido
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.resumoTotal}>
+                <Text style={styles.resumoTotalLabel}>Total</Text>
+                <Text style={styles.totalValor}>{formatarMoeda(total)}</Text>
+              </View>
+
               <Text style={styles.resumoParcelas}>
-                ou em até 12x de R$ {(total / 12).toFixed(2).replace(".", ",")}{" "}
-                sem juros
+                ou em até 12x de {formatarMoeda(total / 12)} sem juros
               </Text>
             </View>
 
@@ -436,12 +566,14 @@ const Carrinho: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.btnFinalizar,
-                  itens.length === 0 && styles.btnFinalizarDisabled,
+                  (itens.length === 0 || loading) && styles.btnFinalizarDisabled,
                 ]}
                 onPress={finalizarCompra}
-                disabled={itens.length === 0}
+                disabled={itens.length === 0 || loading}
               >
-                <Text style={styles.btnFinalizarText}>Finalizar Compra</Text>
+                <Text style={styles.btnFinalizarText}>
+                  {loading ? "Processando..." : "Finalizar Compra"}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -453,7 +585,7 @@ const Carrinho: React.FC = () => {
             </View>
 
             <View style={styles.resumoSeguranca}>
-              <Text style={styles.resumoSegurancaText}> Compra segura</Text>
+              <Text style={styles.resumoSegurancaText}>🔒 Compra segura</Text>
               <Text style={styles.resumoSegurancaText}>
                 🔄 Pagamento protegido
               </Text>
@@ -461,11 +593,12 @@ const Carrinho: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+
+      <ModalDetalhamento />
     </View>
   );
 };
 
-// ===== STYLES =====
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -884,6 +1017,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
   },
+  btnDetalhamento: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 6,
+  },
+  btnDetalhamentoText: {
+    fontSize: 12,
+    color: "#584128",
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
   resumoTotal: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -947,6 +1093,84 @@ const styles = StyleSheet.create({
   resumoSegurancaText: {
     fontSize: 12,
     color: "#7f8c8d",
+  },
+  modalDetalheOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalDetalheContainer: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: 20,
+    width: "100%",
+  },
+  modalDetalheHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalDetalheTitulo: {
+    fontSize: 17,
+    fontWeight: "bold",
+    color: "#2c1810",
+  },
+  modalDetalheLinha: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+  },
+  modalDetalheLabel: {
+    fontSize: 14,
+    color: "#2c1810",
+    flexShrink: 1,
+    paddingRight: 8,
+  },
+  modalDetalheValor: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#2c1810",
+  },
+  corDesconto: {
+    color: "#27ae60",
+  },
+  modalDetalheExplicacao: {
+    fontSize: 12,
+    color: "#8B8272",
+    lineHeight: 18,
+    marginTop: 4,
+    marginBottom: 8,
+    fontStyle: "italic",
+  },
+  modalDetalheDivisor: {
+    height: 1,
+    backgroundColor: "#f0ebe3",
+    marginVertical: 8,
+  },
+  modalDetalheTotalLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2c1810",
+  },
+  modalDetalheTotalValor: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#584128",
+  },
+  modalDetalheBotaoFechar: {
+    backgroundColor: "#584128",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  modalDetalheBotaoFecharText: {
+    color: "#FFF",
+    fontWeight: "600",
+    fontSize: 15,
   },
 });
 

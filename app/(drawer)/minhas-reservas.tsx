@@ -36,6 +36,17 @@ const formatarData = (data?: string | null) => {
   return new Date(data).toLocaleDateString("pt-BR");
 };
 
+// 👇 NOVO: monta o texto "DD/MM/AAAA até DD/MM/AAAA" a partir das datas
+// de check-in/check-out da reserva, ou retorna null quando não houver
+// período definido (ex: reservas de produtos que não são hospedagem).
+const formatarPeriodo = (
+  checkin?: string | null,
+  checkout?: string | null,
+): string | null => {
+  if (!checkin || !checkout) return null;
+  return `${formatarData(checkin)} até ${formatarData(checkout)}`;
+};
+
 const rotuloStatus: Record<string, string> = {
   pendente: "Pendente",
   confirmada: "Confirmada",
@@ -77,6 +88,8 @@ export default function MinhasReservasScreen() {
         return;
       }
 
+      // 👇 corrigido: o service expõe "findMinhasCompras" (antes a tela
+      // chamava um método que não existia em reservaService.ts)
       const dados = await reservaService.findMinhasCompras(usuarioLogado.id);
       // Mais recentes primeiro
       const ordenadas = [...(dados || [])].sort(
@@ -111,6 +124,7 @@ export default function MinhasReservasScreen() {
 
   const renderReserva = ({ item }: { item: ReservaResponse }) => {
     const imagem = normalizarPrimeiraImagem(item.produto?.imagem_url);
+    const periodo = formatarPeriodo(item.data_checkin, item.data_checkout);
 
     return (
       <TouchableOpacity
@@ -135,6 +149,14 @@ export default function MinhasReservasScreen() {
             {item.quantidade} diária{item.quantidade > 1 ? "s" : ""} ·{" "}
             {formatarPreco(item.preco_total)}
           </Text>
+
+          {/* 👇 NOVO: período de check-in/check-out, quando a reserva tiver */}
+          {periodo && (
+            <View style={styles.periodoLinha}>
+              <Ionicons name="calendar-outline" size={13} color="#584128" />
+              <Text style={styles.periodo}>{periodo}</Text>
+            </View>
+          )}
 
           <Text style={styles.codigo}>Código: {item.codigo_reserva}</Text>
 
@@ -249,6 +271,9 @@ const styles = StyleSheet.create({
   info: { flex: 1, justifyContent: "center", gap: 4 },
   nome: { fontSize: 15, fontWeight: "600", color: "#333" },
   detalhe: { fontSize: 13, color: "#666" },
+  // 👇 NOVO: estilos do período de check-in/check-out
+  periodoLinha: { flexDirection: "row", alignItems: "center", gap: 4 },
+  periodo: { fontSize: 12, color: "#584128", fontWeight: "500" },
   codigo: { fontSize: 11, color: "#AAA" },
   data: { fontSize: 12, color: "#999" },
   statusBadge: {

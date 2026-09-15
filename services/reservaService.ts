@@ -1,5 +1,4 @@
-import { Timestamp } from "react-native-reanimated/lib/typescript/commonTypes";
-
+// services/reservaService.ts
 const BASE_URL = "https://back-immercia.onrender.com";
 
 export type FormaPagamento =
@@ -11,14 +10,17 @@ export type FormaPagamento =
 export interface CreateReservaPayload {
   id_cliente: number;
   id_produto: number;
-  quantidade?: number; // padrão 1 se não enviado
-  data_checkin?: string; // "AAAA-MM-DD" — obrigatório pra hospedagem
-  data_checkout?: string; // "AAAA-MM-DD" — obrigatório pra hospedagem
+  quantidade?: number;
+  data_checkin?: string;
+  data_checkout?: string;
   forma_pagamento?: FormaPagamento;
   observacoes?: string;
 }
 
-export interface Reserva {
+// 👇 renomeada de "Reserva" pra "ReservaResponse" (é o nome que a tela
+// de listagem já importa) e datas como string, não Timestamp do
+// react-native-reanimated (isso não tem nada a ver com datas do banco)
+export interface ReservaResponse {
   id: number;
   id_cliente: number;
   id_produto: number;
@@ -27,16 +29,20 @@ export interface Reserva {
   status: "pendente" | "confirmada" | "cancelada" | "concluida";
   forma_pagamento: string | null;
   codigo_reserva: string;
-  data_checkin: Timestamp;
-  data_checkout: Timestamp;
+  data_checkin: string | null;
+  data_checkout: string | null;
   data_reserva: string;
   observacoes: string | null;
+  produto?: {
+    id: number;
+    nome: string;
+    imagem_url?: string;
+    [key: string]: any;
+  };
 }
 
 export const reservaService = {
-  // Cria uma reserva (o backend calcula o preco_total a partir do preço
-  // atual do produto, nunca confia num valor vindo do front)
-  create: async (dados: CreateReservaPayload): Promise<Reserva> => {
+  create: async (dados: CreateReservaPayload): Promise<ReservaResponse> => {
     try {
       const response = await fetch(`${BASE_URL}/reservas`, {
         method: "POST",
@@ -58,8 +64,10 @@ export const reservaService = {
     }
   },
 
-  // "Minhas compras"
-  findByCliente: async (idCliente: number): Promise<Reserva[]> => {
+  // 👇 "Minhas compras" — nome alinhado com o que a tela minhas-reservas
+  // realmente chama (antes era "findByCliente" e a tela chamava
+  // "findMinhasCompras", que não existia -> quebrava em runtime)
+  findMinhasCompras: async (idCliente: number): Promise<ReservaResponse[]> => {
     try {
       const response = await fetch(
         `${BASE_URL}/reservas/minhas-compras/${idCliente}`,
