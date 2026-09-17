@@ -217,6 +217,20 @@ export default function DrawerLayout() {
             drawerLabel: "",
           }}
         />
+        <Drawer.Screen
+          name="minhas-reservas"
+          options={{
+            title: "",
+            drawerLabel: "",
+          }}
+        />
+        <Drawer.Screen
+          name="meus-ganhos"
+          options={{
+            title: "",
+            drawerLabel: "",
+          }}
+        />
       </Drawer>
     </CarrinhoProvider>
   );

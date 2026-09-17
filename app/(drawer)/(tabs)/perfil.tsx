@@ -83,7 +83,7 @@ export default function PerfilScreen() {
     {
       icon: "calendar-outline",
       title: "Minhas Reservas",
-      route: "../minhas-reservas",
+      route: "/minhas-reservas",
       color: "#4ECDC4",
     },
   ];
@@ -105,7 +105,7 @@ export default function PerfilScreen() {
     {
       icon: "stats-chart-outline",
       title: "Meus Ganhos",
-      route: "",
+      route: "/meus-ganhos",
       color: "#96CEB4",
     },
   ];
