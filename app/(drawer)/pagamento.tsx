@@ -18,6 +18,15 @@ import { pagamentoService } from "../../services/PagamentoService";
 import { FormaPagamento, reservaService } from "../../services/reservaService";
 import { userService } from "../../services/userService";
 
+// 🔧 Mesmo percentual usado em Carrinho.tsx e no back-immercia
+// (TAXA_PLATAFORMA_PERCENTUAL no .env, padrão 0.08 = 8%). Usado aqui só
+// para EXIBIÇÃO — o valor realmente cobrado é sempre o que o backend
+// calcula em reservas.service.js (reserva.preco_total já vem com a
+// taxa embutida, e é isso que é enviado pro pagamentoService.create).
+// Se mudar o percentual no .env do back, atualize aqui também (ou crie
+// um endpoint tipo GET /config pra centralizar isso).
+const TAXA_PLATAFORMA_PERCENTUAL = 0.08;
+
 // 👇 opções exibidas na tela. Os "value" precisam bater exatamente com
 // os valores do enum FormaPagamento criado no banco.
 const OPCOES_PAGAMENTO: {
@@ -37,11 +46,22 @@ const formatarDataISOParaBR = (dataISO?: string | null): string => {
   return `${dia}/${mes}/${ano}`;
 };
 
+const formatarMoeda = (valor: number): string =>
+  `R$ ${valor.toFixed(2).replace(".", ",")}`;
+
 export default function Pagamento() {
   const { itens, totalPreco, limparCarrinho } = useCarrinho();
   const [formaSelecionada, setFormaSelecionada] =
     useState<FormaPagamento | null>(null);
   const [processando, setProcessando] = useState(false);
+
+  // 🔧 FIX: agora soma a taxa da plataforma ao total exibido, igual ao
+  // carrinho, em vez de mostrar só o subtotal sem taxa.
+  const subtotal = totalPreco;
+  const taxaAplicativo = Number(
+    (subtotal * TAXA_PLATAFORMA_PERCENTUAL).toFixed(2),
+  );
+  const totalComTaxa = Number((subtotal + taxaAplicativo).toFixed(2));
 
   const handleConfirmarPagamento = async () => {
     if (itens.length === 0) {
@@ -94,7 +114,10 @@ export default function Pagamento() {
         reservasCriadas.push(reserva);
       }
 
-      // Cria o pagamento (simulado, aprovado na hora) pra cada reserva
+      // Cria o pagamento (simulado, aprovado na hora) pra cada reserva.
+      // reserva.preco_total já vem do backend com a taxa da plataforma
+      // embutida (ver reservas.service.js) — é esse valor, com taxa
+      // incluída, que é efetivamente cobrado/registrado.
       await Promise.all(
         reservasCriadas.map((reserva) =>
           pagamentoService.create({
@@ -189,11 +212,20 @@ export default function Pagamento() {
             );
           })}
 
+          {/* 🔧 FIX: subtotal + taxa da plataforma, igual ao carrinho */}
           <View style={styles.totalLinha}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValor}>
-              R$ {totalPreco.toFixed(2).replace(".", ",")}
+            <Text style={styles.subtotalLabel}>Subtotal</Text>
+            <Text style={styles.subtotalValor}>{formatarMoeda(subtotal)}</Text>
+          </View>
+          <View style={styles.totalLinha}>
+            <Text style={styles.subtotalLabel}>Taxa da Plataforma</Text>
+            <Text style={styles.subtotalValor}>
+              {formatarMoeda(taxaAplicativo)}
             </Text>
+          </View>
+          <View style={[styles.totalLinha, styles.totalLinhaFinal]}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValor}>{formatarMoeda(totalComTaxa)}</Text>
           </View>
         </View>
 
@@ -234,12 +266,11 @@ export default function Pagamento() {
             </TouchableOpacity>
           ))}
 
-          {/* 👇 O valor abaixo é exatamente o que o comprador paga. A
-              taxa_plataforma (comissão) é aplicada só sobre o repasse
-              ao anfitrião, calculada no backend — nunca é somada ao
-              valor cobrado do comprador. */}
+          {/* 🔧 FIX: texto atualizado — antes dizia "sem taxas extras",
+              o que não é mais verdade (a taxa agora é cobrada do
+              comprador e já está somada no total acima). */}
           <Text style={styles.avisoTaxa}>
-            O valor total já é o que você paga — sem taxas extras.
+            O total acima já inclui a taxa da plataforma.
           </Text>
 
           {/* ⚠️ Nota visível pro usuário, já que é uma simulação por
@@ -262,7 +293,7 @@ export default function Pagamento() {
             <ActivityIndicator color="#FFF" />
           ) : (
             <Text style={styles.botaoConfirmarTexto}>
-              Confirmar pagamento · R$ {totalPreco.toFixed(2).replace(".", ",")}
+              Confirmar pagamento · {formatarMoeda(totalComTaxa)}
             </Text>
           )}
         </TouchableOpacity>
@@ -307,11 +338,16 @@ const styles = StyleSheet.create({
   totalLinha: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginTop: 8,
+  },
+  totalLinhaFinal: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#DDD",
   },
+  subtotalLabel: { fontSize: 14, color: "#666" },
+  subtotalValor: { fontSize: 14, color: "#333", fontWeight: "600" },
   totalLabel: { fontSize: 16, fontWeight: "bold", color: "#333" },
   totalValor: { fontSize: 18, fontWeight: "bold", color: "#584128" },
   opcaoPagamento: {

@@ -1,5 +1,6 @@
 // Carrinho.tsx
 import { Feather } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -14,13 +15,23 @@ import {
   View,
 } from "react-native";
 
-import {
-  taxa_plataforma
-} from"../../services/carrinho.service";
+import {} from "../../services/carrinho.service";
 
-// 👇 Importação do contexto e da taxa vinda do seu serviço
+// � Importação do contexto e da taxa vinda do seu serviço
 import { useCarrinho } from "../../constants/CarrinhoContext";
 
+// �🔧 FIX: o service não exporta "taxa_plataforma" — esse import estava
+// trazendo `undefined`, e por isso a taxa aparecia zerada no carrinho.
+// Usamos aqui o mesmo percentual padrão configurado no back-immercia
+// (TAXA_PLATAFORMA_PERCENTUAL no .env, padrão 0.08 = 8%). Isso é só
+// para EXIBIÇÃO — o valor real cobrado é sempre recalculado no backend
+// em reservas.service.js. Se mudar o percentual no .env do back, precisa
+// atualizar aqui também (ou, melhor ainda, criar um endpoint tipo
+// GET /config que devolva esse percentual pro front consultar).
+const taxa_plataforma = 0.08;
+
+// Mesma URL de produção já usada em pagamentos.service.js
+const API_URL = "https://back-immercia.onrender.com";
 
 // ===== IMAGENS DAS RECOMENDAÇÕES =====
 const canecaImage = require("../../assets/images/caneca.jpg");
@@ -139,7 +150,21 @@ const Carrinho: React.FC = () => {
     if (itens.length === 0) {
       Alert.alert(
         "Carrinho vazio",
-        "Adicione itens ao carrinho antes de finalizar."
+        "Adicione itens ao carrinho antes de finalizar.",
+      );
+      return;
+    }
+
+    // 🔧 FIX: pega o id do usuário logado salvo pelo userService.login
+    // (chave "userId", mesma usada por hospedagens.tsx e outras telas).
+    const idClienteSalvo = await AsyncStorage.getItem("userId");
+    const idCliente = idClienteSalvo ? Number(idClienteSalvo) : null;
+
+    if (!idCliente) {
+      Alert.alert(
+        "Faça login",
+        "Você precisa estar logado para finalizar a compra.",
+        [{ text: "Ir para login", onPress: () => router.push("/login") }],
       );
       return;
     }
@@ -149,11 +174,11 @@ const Carrinho: React.FC = () => {
     try {
       const itemPrincipal = itens[0];
 
-      const response = await fetch("https://sua-api.com/reservas", {
+      const response = await fetch(`${API_URL}/reservas`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id_cliente: "ID_DO_CLIENTE_LOGADO", // Substitua pelo ID real do usuário
+          id_cliente: idCliente,
           id_produto: itemPrincipal.produto.id,
           quantidade: itemPrincipal.quantidade,
           data_checkin: itemPrincipal.produto.data_checkin || null,
@@ -166,7 +191,7 @@ const Carrinho: React.FC = () => {
 
       if (!response.ok) {
         throw new Error(
-          reservaCriada.message || "Erro ao salvar a reserva no servidor."
+          reservaCriada.message || "Erro ao salvar a reserva no servidor.",
         );
       }
 
@@ -182,7 +207,7 @@ const Carrinho: React.FC = () => {
     } catch (error: any) {
       Alert.alert(
         "Erro ao processar",
-        error.message || "Não foi possível registrar a reserva."
+        error.message || "Não foi possível registrar a reserva.",
       );
     } finally {
       setLoading(false);
@@ -236,7 +261,8 @@ const Carrinho: React.FC = () => {
           </View>
 
           <Text style={styles.modalDetalheExplicacao}>
-            A taxa de serviço cobre o suporte, manutenção e segurança do aplicativo.
+            A taxa de serviço cobre o suporte, manutenção e segurança do
+            aplicativo.
           </Text>
 
           <View style={styles.modalDetalheDivisor} />
@@ -368,11 +394,11 @@ const Carrinho: React.FC = () => {
                             <Text style={styles.produtoDatas}>
                               {" "}
                               {formatarDataISOParaBR(
-                                item.produto.data_checkin
+                                item.produto.data_checkin,
                               )}{" "}
                               até{" "}
                               {formatarDataISOParaBR(
-                                item.produto.data_checkout
+                                item.produto.data_checkout,
                               )}
                             </Text>
                           </View>
@@ -384,7 +410,7 @@ const Carrinho: React.FC = () => {
                               onPress={() =>
                                 atualizarQuantidade(
                                   item.produto.id,
-                                  Math.max(1, item.quantidade - 1)
+                                  Math.max(1, item.quantidade - 1),
                                 )
                               }
                               style={[
@@ -402,7 +428,7 @@ const Carrinho: React.FC = () => {
                               onPress={() =>
                                 atualizarQuantidade(
                                   item.produto.id,
-                                  item.quantidade + 1
+                                  item.quantidade + 1,
                                 )
                               }
                               style={styles.qtdBtn}
@@ -501,7 +527,9 @@ const Carrinho: React.FC = () => {
                   </TouchableOpacity>
                 </View>
 
-                {cupomFeedback.mensagem && (
+                {/* 🔧 FIX: "" && (...) renderiza uma string vazia como filho da View.
+                    Forçamos !! para garantir um booleano real. */}
+                {!!cupomFeedback.mensagem && (
                   <Text
                     style={[
                       styles.cupomFeedback,
@@ -514,7 +542,7 @@ const Carrinho: React.FC = () => {
                   </Text>
                 )}
 
-                {cupomAplicado && (
+                {!!cupomAplicado && (
                   <View style={styles.cupomAplicado}>
                     <Text style={styles.cupomAplicadoText}>
                       {cupomAplicado} - {desconto}% OFF
@@ -566,7 +594,8 @@ const Carrinho: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.btnFinalizar,
-                  (itens.length === 0 || loading) && styles.btnFinalizarDisabled,
+                  (itens.length === 0 || loading) &&
+                    styles.btnFinalizarDisabled,
                 ]}
                 onPress={finalizarCompra}
                 disabled={itens.length === 0 || loading}
