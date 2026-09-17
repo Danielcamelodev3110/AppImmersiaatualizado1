@@ -28,7 +28,7 @@ import { useCarrinho } from "../../constants/CarrinhoContext";
 // em reservas.service.js. Se mudar o percentual no .env do back, precisa
 // atualizar aqui também (ou, melhor ainda, criar um endpoint tipo
 // GET /config que devolva esse percentual pro front consultar).
-const taxa_plataforma = 0.08;
+const taxa_plataforma = 0.1;
 
 // Mesma URL de produção já usada em pagamentos.service.js
 const API_URL = "https://back-immercia.onrender.com";

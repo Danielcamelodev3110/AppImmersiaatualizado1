@@ -25,7 +25,7 @@ import { userService } from "../../services/userService";
 // taxa embutida, e é isso que é enviado pro pagamentoService.create).
 // Se mudar o percentual no .env do back, atualize aqui também (ou crie
 // um endpoint tipo GET /config pra centralizar isso).
-const TAXA_PLATAFORMA_PERCENTUAL = 0.08;
+const TAXA_PLATAFORMA_PERCENTUAL = 0.1;
 
 // 👇 opções exibidas na tela. Os "value" precisam bater exatamente com
 // os valores do enum FormaPagamento criado no banco.
