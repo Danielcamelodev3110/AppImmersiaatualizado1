@@ -107,50 +107,54 @@ export default function MeusGanhosScreen() {
     carregarDados();
   }, [carregarDados]);
 
-  const renderReserva = ({ item }: { item: Reserva }) => (
-    <View style={styles.card}>
-      <View style={styles.cardTopo}>
-        <Text style={styles.produtoNome} numberOfLines={1}>
-          {item.produto?.nome || "Produto"}
-        </Text>
-        <View
-          style={[
-            styles.statusBadge,
-            { backgroundColor: corDoStatus(item.status) + "20" },
-          ]}
-        >
-          <Text
-            style={[styles.statusTexto, { color: corDoStatus(item.status) }]}
+  const renderReserva = ({ item }: { item: Reserva }) => {
+    // 🔧 FIX: preço sem a taxa do cliente (10%) — se por algum motivo o
+    // backend não mandar preco_base (ex: dados antigos), calcula aqui
+    // como fallback.
+    const precoBase =
+      item.preco_base ?? item.preco_total - item.taxa_plataforma;
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardTopo}>
+          <Text style={styles.produtoNome} numberOfLines={1}>
+            {item.produto?.nome || "Produto"}
+          </Text>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: corDoStatus(item.status) + "20" },
+            ]}
           >
-            {rotuloStatus[item.status] || item.status}
+            <Text
+              style={[styles.statusTexto, { color: corDoStatus(item.status) }]}
+            >
+              {rotuloStatus[item.status] || item.status}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.data}>{formatarData(item.data_reserva)}</Text>
+
+        <View style={styles.linhaValor}>
+          <Text style={styles.linhaValorLabel}>Valor da reserva</Text>
+          <Text style={styles.linhaValorTexto}>{formatarMoeda(precoBase)}</Text>
+        </View>
+        <View style={styles.linhaValor}>
+          <Text style={styles.linhaValorLabel}>Sua taxa</Text>
+          <Text style={styles.linhaValorTaxa}>
+            − {formatarMoeda(item.taxa_produto)}
+          </Text>
+        </View>
+        <View style={[styles.linhaValor, styles.linhaLiquido]}>
+          <Text style={styles.linhaLiquidoLabel}>Você recebe</Text>
+          <Text style={styles.linhaLiquidoTexto}>
+            {formatarMoeda(item.valor_repasse ?? precoBase - item.taxa_produto)}
           </Text>
         </View>
       </View>
-
-      <Text style={styles.data}>{formatarData(item.data_reserva)}</Text>
-
-      <View style={styles.linhaValor}>
-        <Text style={styles.linhaValorLabel}>Valor da reserva</Text>
-        <Text style={styles.linhaValorTexto}>
-          {formatarMoeda(item.preco_total)}
-        </Text>
-      </View>
-      <View style={styles.linhaValor}>
-        <Text style={styles.linhaValorLabel}>Taxa da plataforma</Text>
-        <Text style={styles.linhaValorTaxa}>
-          − {formatarMoeda(item.taxa_plataforma)}
-        </Text>
-      </View>
-      <View style={[styles.linhaValor, styles.linhaLiquido]}>
-        <Text style={styles.linhaLiquidoLabel}>Você recebe</Text>
-        <Text style={styles.linhaLiquidoTexto}>
-          {formatarMoeda(
-            item.valor_repasse ?? item.preco_total - item.taxa_plataforma,
-          )}
-        </Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   if (carregando) {
     return (
@@ -204,15 +208,15 @@ export default function MeusGanhosScreen() {
               </View>
               <View style={styles.resumoCardSecundario}>
                 <Text style={styles.resumoSecundarioLabel}>
-                  Taxa da plataforma
-                  {resumo?.percentualTaxa
-                    ? ` (${(resumo.percentualTaxa * 100).toFixed(0)}%)`
+                  Sua taxa
+                  {resumo?.percentualTaxaProduto
+                    ? ` (${(resumo.percentualTaxaProduto * 100).toFixed(0)}%)`
                     : ""}
                 </Text>
                 <Text
                   style={[styles.resumoSecundarioValor, { color: "#FF6B6B" }]}
                 >
-                  − {formatarMoeda(resumo?.totalTaxaPlataforma)}
+                  − {formatarMoeda(resumo?.totalTaxaProduto)}
                 </Text>
               </View>
             </View>

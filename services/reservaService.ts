@@ -42,15 +42,22 @@ export interface Reserva {
   id_cliente: number;
   id_produto: number;
   quantidade: number;
+  // 👇 Valor total pago pelo CLIENTE (preço do produto + taxa da
+  // plataforma de 10%). Usado no carrinho/pagamento — não é o que o
+  // anfitrião recebe.
   preco_total: number;
-  // 👇 Taxa de comissão da plataforma sobre essa reserva (calculada e
-  // gravada pelo backend na criação — nunca é enviada pelo app).
-  // É descontada do valor repassado ao anfitrião, o comprador paga
-  // sempre preco_total, nunca preco_total + taxa.
+  // 👇 Taxa cobrada do CLIENTE (10%), somada ao preço pra formar o
+  // preco_total. Não tem relação com o quanto o anfitrião recebe.
   taxa_plataforma: number;
-  // 👇 Campo derivado (não existe como coluna no banco): preco_total -
-  // taxa_plataforma. O backend calcula isso em tempo real em toda
-  // resposta, pra nunca ficar desatualizado.
+  // 👇 Taxa cobrada do ANFITRIÃO (3%), calculada sobre o preço base do
+  // produto (sem a taxa do cliente) e descontada do repasse dele. Nunca
+  // deve ser exibida nas telas de carrinho ou pagamento.
+  taxa_produto: number;
+  // 👇 Campos derivados (não existem como coluna no banco — o backend
+  // calcula em toda resposta, pra nunca ficar desatualizado):
+  // preco_base = preco_total - taxa_plataforma (preço sem nenhuma taxa)
+  preco_base?: number;
+  // valor_repasse = preco_base - taxa_produto (o que o anfitrião recebe)
   valor_repasse?: number;
   status: "pendente" | "confirmada" | "cancelada" | "concluida";
   forma_pagamento: string | null;
@@ -67,16 +74,18 @@ export interface Reserva {
 // (ex: minhas-reservas.tsx)
 export type ReservaResponse = Reserva;
 
+// 👇 Resumo pensado só pro anfitrião: nada relacionado à taxa do
+// cliente (10%) aparece aqui, só o que afeta o que ele recebe.
 export interface ResumoGanhos {
-  totalBruto: number;
-  totalTaxaPlataforma: number;
-  totalLiquido: number;
+  totalBruto: number; // soma do preço base das reservas (sem nenhuma taxa)
+  totalTaxaProduto: number; // soma da taxa do anfitrião (3%) descontada
+  totalLiquido: number; // totalBruto - totalTaxaProduto (o que ele recebeu)
   quantidadeReservas: number;
-  percentualTaxa: number;
+  percentualTaxaProduto: number; // ex: 0.03
 }
 
 export const reservaService = {
-  // Cria uma reserva (o backend calcula o preco_total e a taxa_plataforma
+  // Cria uma reserva (o backend calcula o preco_total e as taxas
   // a partir do preço atual do produto, nunca confia num valor vindo do front)
   create: async (dados: CreateReservaPayload): Promise<Reserva> => {
     try {
@@ -152,7 +161,8 @@ export const reservaService = {
   },
 
   // Resumo financeiro do anfitrião (usado na tela "Meus Ganhos"): total
-  // bruto vendido, total retido de taxa_plataforma e total líquido recebido.
+  // vendido (sem taxa do cliente), total descontado de taxa do produto
+  // (3%, do anfitrião) e total líquido recebido.
   getResumoGanhos: async (idAnfitriao: number): Promise<ResumoGanhos> => {
     try {
       const response = await fetch(

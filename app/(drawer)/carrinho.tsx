@@ -1,6 +1,6 @@
 // Carrinho.tsx
-import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -17,10 +17,7 @@ import {
 
 import {} from "../../services/carrinho.service";
 
-// � Importação do contexto e da taxa vinda do seu serviço
-import { useCarrinho } from "../../constants/CarrinhoContext";
-
-// �🔧 FIX: o service não exporta "taxa_plataforma" — esse import estava
+// 🔧 FIX: o service não exporta "taxa_plataforma" — esse import estava
 // trazendo `undefined`, e por isso a taxa aparecia zerada no carrinho.
 // Usamos aqui o mesmo percentual padrão configurado no back-immercia
 // (TAXA_PLATAFORMA_PERCENTUAL no .env, padrão 0.08 = 8%). Isso é só
@@ -29,6 +26,9 @@ import { useCarrinho } from "../../constants/CarrinhoContext";
 // atualizar aqui também (ou, melhor ainda, criar um endpoint tipo
 // GET /config que devolva esse percentual pro front consultar).
 const taxa_plataforma = 0.1;
+
+// 👇 Importação do contexto e da taxa vinda do seu serviço
+import { useCarrinho } from "../../constants/CarrinhoContext";
 
 // Mesma URL de produção já usada em pagamentos.service.js
 const API_URL = "https://back-immercia.onrender.com";

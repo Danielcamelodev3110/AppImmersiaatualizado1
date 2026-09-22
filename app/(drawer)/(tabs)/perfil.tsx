@@ -120,7 +120,7 @@ export default function PerfilScreen() {
     {
       icon: "stats-chart-outline",
       title: "Relatórios Gerais",
-      route: "",
+      route: "../relatorio",
       color: "#584128",
     },
   ];
