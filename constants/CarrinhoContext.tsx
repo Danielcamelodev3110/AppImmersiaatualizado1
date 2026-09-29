@@ -6,6 +6,8 @@ import React, {
   useState,
 } from "react";
 
+import { Cupom, cuponsService } from "../services/cuponsService";
+
 // Formato mínimo do produto que o carrinho precisa conhecer.
 // Ajuste os campos aqui se o seu ProdutoResponse tiver nomes diferentes.
 export interface ProdutoCarrinho {
@@ -23,6 +25,11 @@ export interface ItemCarrinho {
   quantidade: number;
 }
 
+export interface ResultadoAplicarCupom {
+  sucesso: boolean;
+  mensagem: string;
+}
+
 interface CarrinhoContextData {
   itens: ItemCarrinho[];
   adicionarAoCarrinho: (produto: ProdutoCarrinho, quantidade?: number) => void;
@@ -31,6 +38,17 @@ interface CarrinhoContextData {
   limparCarrinho: () => void;
   totalItens: number;
   totalPreco: number;
+  // 👇 Cupom — compartilhado entre Carrinho e Pagamento, pra não se
+  // perder ao navegar entre as telas.
+  cupomAplicado: Cupom | null;
+  aplicandoCupom: boolean;
+  aplicarCupom: (
+    codigo: string,
+    idCliente: number,
+  ) => Promise<ResultadoAplicarCupom>;
+  removerCupom: () => void;
+  valorDesconto: number;
+  totalComDesconto: number;
 }
 
 const CarrinhoContext = createContext<CarrinhoContextData | undefined>(
@@ -39,6 +57,8 @@ const CarrinhoContext = createContext<CarrinhoContextData | undefined>(
 
 export function CarrinhoProvider({ children }: { children: ReactNode }) {
   const [itens, setItens] = useState<ItemCarrinho[]>([]);
+  const [cupomAplicado, setCupomAplicado] = useState<Cupom | null>(null);
+  const [aplicandoCupom, setAplicandoCupom] = useState(false);
 
   const adicionarAoCarrinho = (produto: ProdutoCarrinho, quantidade = 1) => {
     setItens((atual) => {
@@ -74,7 +94,12 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const limparCarrinho = () => setItens([]);
+  // 🔧 Limpar o carrinho também limpa o cupom aplicado — evita que um
+  // cupom já usado fique "grudado" pra próxima compra.
+  const limparCarrinho = () => {
+    setItens([]);
+    setCupomAplicado(null);
+  };
 
   const totalItens = useMemo(
     () => itens.reduce((soma, item) => soma + item.quantidade, 0),
@@ -90,6 +115,51 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     [itens],
   );
 
+  // 🔧 Cupom: valida de verdade contra a API (nunca confia num valor
+  // fixo no código do front) e só guarda o cupom no estado se a
+  // validação passar.
+  const aplicarCupom = async (
+    codigo: string,
+    idCliente: number,
+  ): Promise<ResultadoAplicarCupom> => {
+    setAplicandoCupom(true);
+    try {
+      const cupom = await cuponsService.validarParaUso(
+        codigo,
+        idCliente,
+        totalPreco,
+      );
+      setCupomAplicado(cupom);
+      return {
+        sucesso: true,
+        mensagem: `Cupom aplicado! ${cupom.percentual_desconto}% de desconto`,
+      };
+    } catch (error: any) {
+      return {
+        sucesso: false,
+        mensagem: error.message || "Não foi possível aplicar o cupom.",
+      };
+    } finally {
+      setAplicandoCupom(false);
+    }
+  };
+
+  const removerCupom = () => setCupomAplicado(null);
+
+  const valorDesconto = useMemo(() => {
+    if (!cupomAplicado) return 0;
+    return Number(
+      ((totalPreco * Number(cupomAplicado.percentual_desconto)) / 100).toFixed(
+        2,
+      ),
+    );
+  }, [cupomAplicado, totalPreco]);
+
+  const totalComDesconto = useMemo(
+    () => Number((totalPreco - valorDesconto).toFixed(2)),
+    [totalPreco, valorDesconto],
+  );
+
   return (
     <CarrinhoContext.Provider
       value={{
@@ -100,6 +170,12 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
         limparCarrinho,
         totalItens,
         totalPreco,
+        cupomAplicado,
+        aplicandoCupom,
+        aplicarCupom,
+        removerCupom,
+        valorDesconto,
+        totalComDesconto,
       }}
     >
       {children}

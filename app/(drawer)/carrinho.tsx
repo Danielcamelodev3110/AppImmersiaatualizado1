@@ -64,11 +64,15 @@ const Carrinho: React.FC = () => {
     atualizarQuantidade,
     limparCarrinho,
     totalPreco,
+    // 🔧 Cupom agora vem do contexto (compartilhado com Pagamento.tsx)
+    cupomAplicado,
+    aplicandoCupom,
+    aplicarCupom: aplicarCupomContexto,
+    removerCupom,
+    valorDesconto,
   } = useCarrinho();
 
   const [cupom, setCupom] = useState("");
-  const [cupomAplicado, setCupomAplicado] = useState<string | null>(null);
-  const [desconto, setDesconto] = useState(0);
   const [cupomFeedback, setCupomFeedback] = useState({
     mensagem: "",
     tipo: "",
@@ -91,8 +95,9 @@ const Carrinho: React.FC = () => {
   ];
 
   // ===== CÁLCULOS UTILIZANDO A TAXA DO SERVICE =====
+  // 🔧 valorDesconto agora vem do contexto (calculado a partir do
+  // cupomAplicado validado de verdade contra a API)
   const subtotal = totalPreco;
-  const valorDesconto = (subtotal * desconto) / 100;
   const subtotalComDesconto = subtotal - valorDesconto;
 
   // Trata a taxa vinda do service (seja decimal 0.08 ou porcentagem 8)
@@ -104,45 +109,45 @@ const Carrinho: React.FC = () => {
   const taxaAplicativo = subtotalComDesconto * taxaPercentual;
   const total = subtotalComDesconto + taxaAplicativo;
 
-  const aplicarCupom = () => {
+  // 🔧 FIX: agora valida de verdade contra a API (tabela cupons), em vez
+  // de comparar com códigos fixos no código do app. Exige estar logado e
+  // já ter resgatado o cupom na tela de Cupons.
+  const aplicarCupom = async () => {
     const codigo = cupom.trim().toUpperCase();
 
-    if (codigo === "IMERCIA10") {
-      setCupomAplicado(codigo);
-      setDesconto(10);
-      setCupomFeedback({
-        mensagem: "Cupom aplicado com sucesso! 10% de desconto",
-        tipo: "success",
-      });
-      setCupom("");
-    } else if (codigo === "IMERCIA20") {
-      setCupomAplicado(codigo);
-      setDesconto(20);
-      setCupomFeedback({
-        mensagem: "Cupom aplicado com sucesso! 20% de desconto",
-        tipo: "success",
-      });
-      setCupom("");
-    } else if (codigo === "") {
+    if (codigo === "") {
       setCupomFeedback({
         mensagem: "Digite um código de cupom",
         tipo: "error",
       });
-    } else {
+      setTimeout(() => setCupomFeedback({ mensagem: "", tipo: "" }), 3000);
+      return;
+    }
+
+    const idClienteSalvo = await AsyncStorage.getItem("userId");
+    const idCliente = idClienteSalvo ? Number(idClienteSalvo) : null;
+
+    if (!idCliente) {
       setCupomFeedback({
-        mensagem: "Código inválido. Tente novamente.",
+        mensagem: "Faça login para aplicar um cupom",
         tipo: "error",
       });
+      setTimeout(() => setCupomFeedback({ mensagem: "", tipo: "" }), 3000);
+      return;
+    }
+
+    const resultado = await aplicarCupomContexto(codigo, idCliente);
+    setCupomFeedback({
+      mensagem: resultado.mensagem,
+      tipo: resultado.sucesso ? "success" : "error",
+    });
+    if (resultado.sucesso) {
+      setCupom("");
     }
 
     setTimeout(() => {
       setCupomFeedback({ mensagem: "", tipo: "" });
     }, 3000);
-  };
-
-  const removerCupom = () => {
-    setCupomAplicado(null);
-    setDesconto(0);
   };
 
   // ===== FINALIZAR COMPRA & ENVIAR PARA O BACKEND =====
@@ -184,6 +189,9 @@ const Carrinho: React.FC = () => {
           data_checkin: itemPrincipal.produto.data_checkin || null,
           data_checkout: itemPrincipal.produto.data_checkout || null,
           observacoes: "",
+          // 🔧 Manda o código do cupom aplicado (se houver) — o backend
+          // revalida tudo de novo antes de aplicar o desconto de verdade.
+          codigo_cupom: cupomAplicado?.codigo || null,
         }),
       });
 
@@ -242,10 +250,11 @@ const Carrinho: React.FC = () => {
             </Text>
           </View>
 
-          {desconto > 0 && (
+          {valorDesconto > 0 && (
             <View style={styles.modalDetalheLinha}>
               <Text style={styles.modalDetalheLabel}>
-                Desconto ({cupomAplicado} · {desconto}%)
+                Desconto ({cupomAplicado?.codigo} ·{" "}
+                {cupomAplicado?.percentual_desconto}%)
               </Text>
               <Text style={[styles.modalDetalheValor, styles.corDesconto]}>
                 - {formatarMoeda(valorDesconto)}
@@ -518,12 +527,15 @@ const Carrinho: React.FC = () => {
                   <TouchableOpacity
                     style={[
                       styles.btnAplicarCupom,
-                      cupomAplicado && styles.btnAplicarCupomDisabled,
+                      (!!cupomAplicado || aplicandoCupom) &&
+                        styles.btnAplicarCupomDisabled,
                     ]}
                     onPress={aplicarCupom}
-                    disabled={!!cupomAplicado}
+                    disabled={!!cupomAplicado || aplicandoCupom}
                   >
-                    <Text style={styles.btnAplicarCupomText}>Aplicar</Text>
+                    <Text style={styles.btnAplicarCupomText}>
+                      {aplicandoCupom ? "..." : "Aplicar"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -545,7 +557,8 @@ const Carrinho: React.FC = () => {
                 {!!cupomAplicado && (
                   <View style={styles.cupomAplicado}>
                     <Text style={styles.cupomAplicadoText}>
-                      {cupomAplicado} - {desconto}% OFF
+                      {cupomAplicado?.codigo} -{" "}
+                      {cupomAplicado?.percentual_desconto}% OFF
                     </Text>
                     <TouchableOpacity onPress={removerCupom}>
                       <Text style={styles.cupomRemover}>✕</Text>
@@ -554,7 +567,7 @@ const Carrinho: React.FC = () => {
                 )}
               </View>
 
-              {desconto > 0 && (
+              {valorDesconto > 0 && (
                 <View style={[styles.resumoLinha, styles.resumoLinhaDesconto]}>
                   <Text style={styles.resumoLinhaLabel}>Desconto</Text>
                   <Text style={styles.resumoLinhaValor}>

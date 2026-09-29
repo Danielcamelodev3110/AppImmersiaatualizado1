@@ -50,18 +50,24 @@ const formatarMoeda = (valor: number): string =>
   `R$ ${valor.toFixed(2).replace(".", ",")}`;
 
 export default function Pagamento() {
-  const { itens, totalPreco, limparCarrinho } = useCarrinho();
+  // 🔧 cupomAplicado/valorDesconto vêm do CarrinhoContext — o mesmo
+  // cupom validado e aplicado lá no carrinho continua valendo aqui.
+  const { itens, totalPreco, limparCarrinho, cupomAplicado, valorDesconto } =
+    useCarrinho();
   const [formaSelecionada, setFormaSelecionada] =
     useState<FormaPagamento | null>(null);
   const [processando, setProcessando] = useState(false);
 
-  // 🔧 FIX: agora soma a taxa da plataforma ao total exibido, igual ao
-  // carrinho, em vez de mostrar só o subtotal sem taxa.
+  // 🔧 FIX: agora desconta o cupom (se houver) antes de calcular a taxa,
+  // igual à ordem de cálculo do carrinho, e mostra a linha de desconto.
   const subtotal = totalPreco;
+  const subtotalComDesconto = Number((subtotal - valorDesconto).toFixed(2));
   const taxaAplicativo = Number(
-    (subtotal * TAXA_PLATAFORMA_PERCENTUAL).toFixed(2),
+    (subtotalComDesconto * TAXA_PLATAFORMA_PERCENTUAL).toFixed(2),
   );
-  const totalComTaxa = Number((subtotal + taxaAplicativo).toFixed(2));
+  const totalComTaxa = Number(
+    (subtotalComDesconto + taxaAplicativo).toFixed(2),
+  );
 
   const handleConfirmarPagamento = async () => {
     if (itens.length === 0) {

@@ -1,153 +1,158 @@
-import React, { useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
-  TextInput,
-  Alert,
   Share,
-  Platform,
-  FlatList,
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { useNavigation, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-const { width } = Dimensions.get('window');
+import { Cupom, cuponsService } from "../../../services/cuponsService";
+import { userService } from "../../../services/userService";
 
-// Dados dos cupons
-const initialCupons = [
-  {
-    id: '1',
-    code: 'IMMERSIAN10',
-    discount: '10%',
-    description: 'Desconto de 10% em qualquer pacote',
-    validUntil: '31/12/2024',
-    category: 'Pacotes',
-    minPurchase: 'R$ 500',
-    used: false,
-  },
-  {
-    id: '2',
-    code: 'HOTEL20',
-    discount: 'R$ 80',
-    description: 'R$ 80 de desconto em hospedagens',
-    validUntil: '30/11/2024',
-    category: 'Hospedagens',
-    minPurchase: 'R$ 300',
-    used: false,
-  },
-  {
-    id: '3',
-    code: 'EXPERIENCE15',
-    discount: '15%',
-    description: '15% off em experiências',
-    validUntil: '15/12/2024',
-    category: 'Experiências',
-    minPurchase: 'R$ 200',
-    used: false,
-  },
-  {
-    id: '4',
-    code: 'MILES300',
-    discount: '300',
-    description: '300 milhas extras por viagem',
-    validUntil: '20/12/2024',
-    category: 'Milhas',
-    minPurchase: 'R$ 1000',
-    used: false,
-  },
-  {
-    id: '5',
-    code: 'BEMVINDO5',
-    discount: '5%',
-    description: '5% de desconto na primeira compra',
-    validUntil: '31/01/2025',
-    category: 'Primeira Compra',
-    minPurchase: 'R$ 100',
-    used: false,
-  },
-  {
-    id: '6',
-    code: 'VERAO2024',
-    discount: 'R$ 100',
-    description: 'R$ 100 de desconto em pacotes de verão',
-    validUntil: '15/02/2025',
-    category: 'Verão',
-    minPurchase: 'R$ 800',
-    used: false,
-  },
-  {
-    id: '7',
-    code: 'GRUPO20',
-    discount: '20%',
-    description: '20% off para grupos acima de 4 pessoas',
-    validUntil: '30/12/2024',
-    category: 'Grupos',
-    minPurchase: 'R$ 1500',
-    used: false,
-  },
-  {
-    id: '8',
-    code: 'LASTMINUTE',
-    discount: 'R$ 50',
-    description: 'R$ 50 de desconto em reservas de última hora',
-    validUntil: '25/12/2024',
-    category: 'Última Hora',
-    minPurchase: 'R$ 400',
-    used: false,
-  },
-];
+// 🔧 Alert.alert não mostra nada visível no Expo Web — só loga no
+// console. Na web usa window.alert; fora da web mantém o Alert nativo.
+const mostrarAviso = (titulo: string, mensagem: string) => {
+  if (Platform.OS === "web") {
+    window.alert(`${titulo}\n\n${mensagem}`);
+  } else {
+    Alert.alert(titulo, mensagem);
+  }
+};
 
-// Categorias para filtro
-const categories = ['Todos', 'Pacotes', 'Hospedagens', 'Experiências', 'Milhas', 'Verão', 'Grupos'];
+const formatarData = (data?: string | null): string => {
+  if (!data) return "Sem validade";
+  const [ano, mes, dia] = data.split("-");
+  return `${dia}/${mes}/${ano}`;
+};
+
+const formatarMoeda = (valor: number): string =>
+  `R$ ${Number(valor || 0)
+    .toFixed(2)
+    .replace(".", ",")}`;
 
 export default function CuponsScreen() {
   const router = useRouter();
-  const [cupons, setCupons] = useState(initialCupons);
-  const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [searchText, setSearchText] = useState('');
 
-  // Filtrar cupons
-  const filteredCupons = cupons.filter(cupom => {
-    const matchCategory = selectedCategory === 'Todos' || cupom.category === selectedCategory;
-    const matchSearch = cupom.code.toLowerCase().includes(searchText.toLowerCase()) ||
-                        cupom.description.toLowerCase().includes(searchText.toLowerCase());
+  const [cupons, setCupons] = useState<Cupom[]>([]);
+  const [resgatadosIds, setResgatadosIds] = useState<number[]>([]);
+  const [idClienteLogado, setIdClienteLogado] = useState<number | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [resgatandoId, setResgatandoId] = useState<number | null>(null);
+
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [searchText, setSearchText] = useState("");
+
+  const carregarDados = useCallback(async () => {
+    try {
+      const sessao = await userService.getSavedSession();
+      const usuarioLogado = sessao?.user ? sessao.user : sessao;
+      const idCliente = usuarioLogado?.id || null;
+      setIdClienteLogado(idCliente);
+
+      const [cuponsDados, resgatadosDados] = await Promise.all([
+        cuponsService.findAll(),
+        idCliente
+          ? cuponsService.findResgatadosPorCliente(idCliente)
+          : Promise.resolve([]),
+      ]);
+
+      setCupons(cuponsDados);
+      setResgatadosIds(resgatadosDados);
+    } catch (error: any) {
+      mostrarAviso(
+        "Erro",
+        error.message || "Não foi possível carregar os cupons.",
+      );
+    } finally {
+      setCarregando(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    carregarDados();
+  }, [carregarDados]);
+
+  // Categorias derivadas dos cupons que realmente existem no banco
+  const categories = [
+    "Todos",
+    ...Array.from(new Set(cupons.map((c) => c.categoria))),
+  ];
+
+  const filteredCupons = cupons.filter((cupom) => {
+    const matchCategory =
+      selectedCategory === "Todos" || cupom.categoria === selectedCategory;
+    const termo = searchText.toLowerCase();
+    const matchSearch =
+      cupom.codigo.toLowerCase().includes(termo) ||
+      (cupom.descricao || "").toLowerCase().includes(termo);
     return matchCategory && matchSearch;
   });
 
-  // Copiar código do cupom
-  const copyCode = async (code, discount) => {
+  const copyCode = async (cupom: Cupom) => {
     try {
       await Share.share({
-        message: ` Cupom ${code}\n Desconto: ${discount}\n Aproveite no Immersian!`,
-        title: 'Cupom Immersian',
+        message: `Cupom ${cupom.codigo}\nDesconto: ${cupom.percentual_desconto}%\nAproveite no Immersia!`,
+        title: "Cupom Immersia",
       });
-      Alert.alert('Sucesso!', 'Cupom compartilhado! Use no momento da compra.');
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível compartilhar o cupom');
+      mostrarAviso("Erro", "Não foi possível compartilhar o cupom");
     }
   };
 
-  // Usar cupom
-  const useCupom = (id) => {
-    setCupons(cupons.map(cupom => 
-      cupom.id === id ? { ...cupom, used: true } : cupom
-    ));
-    Alert.alert('Cupom resgatado!', 'Aplique o código na hora do pagamento.');
+  const handleResgatar = async (cupom: Cupom) => {
+    if (!idClienteLogado) {
+      mostrarAviso(
+        "Atenção",
+        "Você precisa estar logado para resgatar um cupom.",
+      );
+      router.push("/login");
+      return;
+    }
+
+    setResgatandoId(cupom.id);
+    try {
+      await cuponsService.resgatar(cupom.id, idClienteLogado);
+      setResgatadosIds((prev) => [...prev, cupom.id]);
+      mostrarAviso(
+        "Cupom resgatado!",
+        "Aplique o código na hora do pagamento.",
+      );
+    } catch (error: any) {
+      mostrarAviso("Erro ao resgatar", error.message || "Tente novamente.");
+    } finally {
+      setResgatandoId(null);
+    }
   };
 
-  // Contar cupons disponíveis
-  const availableCount = cupons.filter(c => !c.used).length;
+  const availableCount = cupons.filter(
+    (c) => !resgatadosIds.includes(c.id),
+  ).length;
 
-  // HEADER FIXO
   const HeaderFixo = () => (
     <View style={styles.headerContainer}>
-      <TouchableOpacity onPress={() => router.push('/')} style={styles.backButton}>
+      <TouchableOpacity
+        onPress={() => router.push("/")}
+        style={styles.backButton}
+      >
         <Ionicons name="arrow-back" size={24} color="#584128" />
       </TouchableOpacity>
       <Text style={styles.headerTitle}>Cupons</Text>
@@ -155,16 +160,15 @@ export default function CuponsScreen() {
     </View>
   );
 
-  // SUBTITLE (parte que rola)
   const Subtitle = () => (
     <View style={styles.subtitleContainer}>
       <Text style={styles.headerSubtitle}>
-        {availableCount} {availableCount === 1 ? 'cupom disponível' : 'cupons disponíveis'}
+        {availableCount}{" "}
+        {availableCount === 1 ? "cupom disponível" : "cupons disponíveis"}
       </Text>
     </View>
   );
 
-  // Barra de busca
   const SearchBar = () => (
     <View style={styles.searchContainer}>
       <Ionicons name="search-outline" size={20} color="#C5A87B" />
@@ -175,18 +179,17 @@ export default function CuponsScreen() {
         value={searchText}
         onChangeText={setSearchText}
       />
-      {searchText !== '' && (
-        <TouchableOpacity onPress={() => setSearchText('')}>
+      {searchText !== "" && (
+        <TouchableOpacity onPress={() => setSearchText("")}>
           <Ionicons name="close-circle" size={20} color="#999" />
         </TouchableOpacity>
       )}
     </View>
   );
 
-  // Categorias
   const CategoriesList = () => (
-    <ScrollView 
-      horizontal 
+    <ScrollView
+      horizontal
       showsHorizontalScrollIndicator={false}
       style={styles.categoriesContainer}
     >
@@ -199,10 +202,12 @@ export default function CuponsScreen() {
           ]}
           onPress={() => setSelectedCategory(cat)}
         >
-          <Text style={[
-            styles.categoryText,
-            selectedCategory === cat && styles.categoryTextActive,
-          ]}>
+          <Text
+            style={[
+              styles.categoryText,
+              selectedCategory === cat && styles.categoryTextActive,
+            ]}
+          >
             {cat}
           </Text>
         </TouchableOpacity>
@@ -210,53 +215,66 @@ export default function CuponsScreen() {
     </ScrollView>
   );
 
-  const renderItem = ({ item }) => (
-    <View style={[styles.cupomCard, item.used && styles.cupomCardUsed]}>
-      <View style={styles.cupomLeft}>
-        <View style={styles.cupomIcon}>
-          <Text style={styles.cupomIconText}>🎫</Text>
+  const renderItem = ({ item }: { item: Cupom }) => {
+    const usado = resgatadosIds.includes(item.id);
+    const resgatandoEsse = resgatandoId === item.id;
+
+    return (
+      <View style={[styles.cupomCard, usado && styles.cupomCardUsed]}>
+        <View style={styles.cupomLeft}>
+          <View style={styles.cupomIcon}>
+            <Text style={styles.cupomIconText}>🎫</Text>
+          </View>
         </View>
-      </View>
-      
-      <View style={styles.cupomCenter}>
-        <Text style={styles.cupomDiscount}>{item.discount} OFF</Text>
-        <Text style={styles.cupomDescription}>{item.description}</Text>
-        <View style={styles.cupomDetails}>
-          <Text style={styles.cupomDetail}> {item.category}</Text>
-          <Text style={styles.cupomDetail}> Mínimo: {item.minPurchase}</Text>
-          <Text style={styles.cupomDetail}> Válido até: {item.validUntil}</Text>
-        </View>
-      </View>
-      
-      <View style={styles.cupomRight}>
-        <TouchableOpacity
-          style={[styles.codeButton, item.used && styles.codeButtonUsed]}
-          onPress={() => copyCode(item.code, item.discount)}
-          disabled={item.used}
-        >
-          <Text style={styles.codeText}>{item.code}</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.useButton, item.used && styles.useButtonUsed]}
-          onPress={() => !item.used && useCupom(item.id)}
-          disabled={item.used}
-        >
-          <Text style={styles.useButtonText}>
-            {item.used ? '✅ Usado' : ' Resgatar'}
+
+        <View style={styles.cupomCenter}>
+          <Text style={styles.cupomDiscount}>
+            {item.percentual_desconto}% OFF
           </Text>
-        </TouchableOpacity>
+          <Text style={styles.cupomDescription}>{item.descricao}</Text>
+          <View style={styles.cupomDetails}>
+            <Text style={styles.cupomDetail}>{item.categoria}</Text>
+            <Text style={styles.cupomDetail}>
+              Mínimo: {formatarMoeda(item.valor_minimo_compra)}
+            </Text>
+            <Text style={styles.cupomDetail}>
+              Válido até: {formatarData(item.data_validade)}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.cupomRight}>
+          <TouchableOpacity
+            style={[styles.codeButton, usado && styles.codeButtonUsed]}
+            onPress={() => copyCode(item)}
+            disabled={usado}
+          >
+            <Text style={styles.codeText}>{item.codigo}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.useButton, usado && styles.useButtonUsed]}
+            onPress={() => !usado && handleResgatar(item)}
+            disabled={usado || resgatandoEsse}
+          >
+            {resgatandoEsse ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Text style={styles.useButtonText}>
+                {usado ? "✅ Usado" : "Resgatar"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="pricetag-outline" size={80} color="#C5A87B" />
       <Text style={styles.emptyTitle}>Nenhum cupom encontrado</Text>
-      <Text style={styles.emptyText}>
-        Tente outra busca ou categoria
-      </Text>
+      <Text style={styles.emptyText}>Tente outra busca ou categoria</Text>
     </View>
   );
 
@@ -268,32 +286,44 @@ export default function CuponsScreen() {
     </>
   );
 
+  if (carregando) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="dark" />
+        <HeaderFixo />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#584128" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
-      {/* Header fixo fora da FlatList */}
+
       <HeaderFixo />
-      
-      {/* FlatList com o resto do conteúdo */}
+
       <FlatList
         data={filteredCupons}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => String(item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContainer}
         ListHeaderComponent={ListHeader}
         ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
 
-      {/* Dicas */}
       <View style={styles.tipsCard}>
-        <Text style={styles.tipsTitle}> Como usar:</Text>
+        <Text style={styles.tipsTitle}>Como usar:</Text>
         <Text style={styles.tipsText}>
-          1. Toque no código do cupom para compartilhar{'\n'}
-          2. Clique em "Resgatar" para ativar o cupom{'\n'}
-          3. Use o código no momento da sua compra{'\n'}
-          4. Cada cupom pode ser usado apenas uma vez
+          1. Toque no código do cupom para compartilhar{"\n"}
+          2. Clique em "Resgatar" para ativar o cupom{"\n"}
+          3. Use o código no momento da sua compra{"\n"}
+          4. Cada cupom pode ser resgatado apenas uma vez por cliente
         </Text>
       </View>
     </SafeAreaView>
@@ -305,49 +335,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#EDEAE0",
   },
-  
-  // HEADER FIXO - Fora da FlatList
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   headerContainer: {
     height: 70,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: "#E0E0E0",
     zIndex: 1,
   },
-  
   backButton: {
     padding: 8,
   },
-  
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#584128',
+    fontWeight: "bold",
+    color: "#584128",
   },
-  
   headerRight: {
     width: 40,
   },
-  
-  // SUBTITLE (rolável)
+
   subtitleContainer: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    backgroundColor: '#EDEAE0',
+    backgroundColor: "#EDEAE0",
     marginBottom: 5,
   },
-  
   headerSubtitle: {
     fontSize: 14,
-    color: '#C5A87B',
-    textAlign: 'center',
+    color: "#C5A87B",
+    textAlign: "center",
   },
-  
-  // Barra de busca
+
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -369,8 +397,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: "#584128",
   },
-  
-  // Categorias
+
   categoriesContainer: {
     paddingHorizontal: 16,
     marginBottom: 15,
@@ -396,14 +423,13 @@ const styles = StyleSheet.create({
     color: "#FFF",
     fontWeight: "bold",
   },
-  
-  // LISTA
+
   listContainer: {
     paddingHorizontal: 16,
     paddingTop: 0,
     paddingBottom: 16,
   },
-  
+
   cupomCard: {
     flexDirection: "row",
     backgroundColor: "#FFF",
@@ -478,6 +504,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
+    minWidth: 70,
+    alignItems: "center",
   },
   useButtonUsed: {
     backgroundColor: "#27AE60",
@@ -487,30 +515,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "bold",
   },
-  
-  // Empty state
+
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 60,
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#584128',
+    fontWeight: "bold",
+    color: "#584128",
     marginTop: 16,
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 14,
-    color: '#C5A87B',
-    textAlign: 'center',
+    color: "#C5A87B",
+    textAlign: "center",
     paddingHorizontal: 40,
     lineHeight: 20,
   },
-  
-  // Dicas
+
   tipsCard: {
     margin: 16,
     marginTop: 5,

@@ -1,6 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system";
 import { useRouter } from "expo-router";
+// 🔧 Import estático normal — mais confiável que import dinâmico aqui,
+// que estava confundindo o formato dos exports do módulo.
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -142,8 +144,11 @@ export default function Relatorio() {
 
       const caminho = `${FileSystem.documentDirectory}${nomeArquivo}`;
 
+      // 🔧 FIX: usa a string literal "utf8" em vez de
+      // FileSystem.EncodingType.UTF8 — é o mesmo valor por trás da
+      // constante, mas não depende de o enum ter carregado certo.
       await FileSystem.writeAsStringAsync(caminho, csv, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: "utf8" as any,
       });
 
       const podeCompartilhar = await Sharing.isAvailableAsync();
