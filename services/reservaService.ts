@@ -16,6 +16,7 @@ export interface CreateReservaPayload {
   data_checkout?: string; // "AAAA-MM-DD" — obrigatório pra hospedagem
   forma_pagamento?: FormaPagamento;
   observacoes?: string;
+  codigo_cupom?: string; // cupom só é consumido depois do pagamento aprovado
 }
 
 // Produto/cliente "resumidos" que vêm junto da reserva via join do backend
@@ -61,6 +62,8 @@ export interface Reserva {
   valor_repasse?: number;
   status: "pendente" | "confirmada" | "cancelada" | "concluida";
   forma_pagamento: string | null;
+  codigo_cupom?: string | null;
+  valor_desconto?: number;
   codigo_reserva: string;
   data_checkin: Timestamp;
   data_checkout: Timestamp;

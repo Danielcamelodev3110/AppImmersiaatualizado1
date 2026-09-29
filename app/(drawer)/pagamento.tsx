@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -50,17 +50,30 @@ const formatarMoeda = (valor: number): string =>
   `R$ ${valor.toFixed(2).replace(".", ",")}`;
 
 export default function Pagamento() {
-  // 🔧 cupomAplicado/valorDesconto vêm do CarrinhoContext — o mesmo
-  // cupom validado e aplicado lá no carrinho continua valendo aqui.
-  const { itens, totalPreco, limparCarrinho, cupomAplicado, valorDesconto } =
-    useCarrinho();
+  const { itens, totalPreco, limparCarrinho } = useCarrinho();
+
+  // Cupom aplicado no carrinho (vem pela navegação). O backend revalida
+  // o cupom ao criar a reserva e só o marca como usado depois que o
+  // pagamento é aprovado.
+  const params = useLocalSearchParams<{
+    codigoCupom?: string;
+    descontoPercentual?: string;
+  }>();
+  const codigoCupom = params.codigoCupom || "";
+  const descontoPercentual = Number(params.descontoPercentual) || 0;
   const [formaSelecionada, setFormaSelecionada] =
     useState<FormaPagamento | null>(null);
   const [processando, setProcessando] = useState(false);
+  // Trava síncrona contra toque duplo: o state acima só atualiza no
+  // próximo render, então dois toques rápidos passavam os dois.
+  const travaEnvio = useRef(false);
 
-  // 🔧 FIX: agora desconta o cupom (se houver) antes de calcular a taxa,
-  // igual à ordem de cálculo do carrinho, e mostra a linha de desconto.
+  // 🔧 FIX: agora soma a taxa da plataforma ao total exibido, igual ao
+  // carrinho, em vez de mostrar só o subtotal sem taxa.
   const subtotal = totalPreco;
+  const valorDesconto = codigoCupom
+    ? Number(((subtotal * descontoPercentual) / 100).toFixed(2))
+    : 0;
   const subtotalComDesconto = Number((subtotal - valorDesconto).toFixed(2));
   const taxaAplicativo = Number(
     (subtotalComDesconto * TAXA_PLATAFORMA_PERCENTUAL).toFixed(2),
@@ -70,6 +83,8 @@ export default function Pagamento() {
   );
 
   const handleConfirmarPagamento = async () => {
+    if (travaEnvio.current) return;
+
     if (itens.length === 0) {
       Alert.alert(
         "Carrinho vazio",
@@ -83,6 +98,7 @@ export default function Pagamento() {
       return;
     }
 
+    travaEnvio.current = true;
     setProcessando(true);
 
     try {
@@ -116,6 +132,7 @@ export default function Pagamento() {
           data_checkin: item.produto.data_checkin,
           data_checkout: item.produto.data_checkout,
           forma_pagamento: formaSelecionada,
+          codigo_cupom: codigoCupom || undefined,
         });
         reservasCriadas.push(reserva);
       }
@@ -154,6 +171,7 @@ export default function Pagamento() {
         "Erro ao processar o pagamento. Tente novamente.";
       Alert.alert("Erro no pagamento", mensagemErro);
     } finally {
+      travaEnvio.current = false;
       setProcessando(false);
     }
   };
@@ -223,6 +241,16 @@ export default function Pagamento() {
             <Text style={styles.subtotalLabel}>Subtotal</Text>
             <Text style={styles.subtotalValor}>{formatarMoeda(subtotal)}</Text>
           </View>
+          {valorDesconto > 0 && (
+            <View style={styles.totalLinha}>
+              <Text style={styles.subtotalLabel}>
+                Desconto ({codigoCupom} · {descontoPercentual}%)
+              </Text>
+              <Text style={styles.descontoValor}>
+                - {formatarMoeda(valorDesconto)}
+              </Text>
+            </View>
+          )}
           <View style={styles.totalLinha}>
             <Text style={styles.subtotalLabel}>Taxa da Plataforma</Text>
             <Text style={styles.subtotalValor}>
@@ -353,6 +381,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#DDD",
   },
   subtotalLabel: { fontSize: 14, color: "#666" },
+  descontoValor: { fontSize: 14, color: "#27ae60", fontWeight: "600" },
   subtotalValor: { fontSize: 14, color: "#333", fontWeight: "600" },
   totalLabel: { fontSize: 16, fontWeight: "bold", color: "#333" },
   totalValor: { fontSize: 18, fontWeight: "bold", color: "#584128" },
