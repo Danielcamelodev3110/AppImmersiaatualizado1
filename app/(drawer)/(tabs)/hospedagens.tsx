@@ -8,6 +8,7 @@ import {
   FlatList,
   Image,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -17,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useCarrinho } from "../../../constants/CarrinhoContext";
+import { favoritosService } from "../../../services/Favoritosservice";
 import { produtoService } from "../../../services/ProdutoService";
 
 interface Hospedagem {
@@ -35,6 +37,16 @@ interface Hospedagem {
   created_at?: string;
   updated_at?: string;
 }
+
+// 🔧 Alert.alert não mostra nada visível no Expo Web — usa window.alert
+// lá, e Alert.alert normal fora da web.
+const mostrarAviso = (titulo: string, mensagem: string) => {
+  if (Platform.OS === "web") {
+    window.alert(`${titulo}\n\n${mensagem}`);
+  } else {
+    Alert.alert(titulo, mensagem);
+  }
+};
 
 // Função para normalizar imagens
 const normalizarImagens = (imagemUrl: any): string[] => {
@@ -138,7 +150,7 @@ export default function HospedagensScreen() {
       setHospedagens(hospedagensFiltradas);
     } catch (error) {
       console.error("Erro ao buscar hospedagens:", error);
-      Alert.alert("Erro", "Não foi possível carregar as hospedagens");
+      mostrarAviso("Erro", "Não foi possível carregar as hospedagens");
     } finally {
       setCarregandoAPI(false);
       setCarregando(false);
@@ -146,15 +158,19 @@ export default function HospedagensScreen() {
     }
   };
 
+  // 🔧 FIX: agora busca os favoritos de verdade na API (tabela
+  // "favoritos"), em vez de um array salvo local no AsyncStorage —
+  // assim os favoritos acompanham o cliente em qualquer dispositivo.
   const carregarFavoritos = async () => {
     try {
-      const userId = await obterIdentificadorUsuario();
-      if (userId) {
-        const favoritosSalvos = await AsyncStorage.getItem(
-          `favoritos_hospedagens_${userId}`,
-        );
-        if (favoritosSalvos) setFavoritos(JSON.parse(favoritosSalvos));
+      const idString = await obterIdentificadorUsuario();
+      if (!idString) {
+        setFavoritos([]);
+        return;
       }
+      const idCliente = Number(idString);
+      const ids = await favoritosService.findIdsPorCliente(idCliente);
+      setFavoritos(ids);
     } catch (error) {
       console.error("Erro ao carregar favoritos:", error);
     }
@@ -241,40 +257,39 @@ export default function HospedagensScreen() {
     return true;
   };
 
+  // 🔧 FIX: agora chama a API de verdade (POST /favoritos) em vez de só
+  // salvar um array local.
   const adicionarFavorito = async (id: number) => {
     const isLoggedIn = await verificarLogin("favorito");
     if (!isLoggedIn) return;
 
     try {
-      const userId = await obterIdentificadorUsuario();
-      if (userId) {
-        const novosFavoritos = [...favoritos, id];
-        setFavoritos(novosFavoritos);
-        await AsyncStorage.setItem(
-          `favoritos_hospedagens_${userId}`,
-          JSON.stringify(novosFavoritos),
-        );
-        Alert.alert("Favoritos", "Hospedagem adicionada aos favoritos!");
-      }
-    } catch (error) {
+      const idString = await obterIdentificadorUsuario();
+      if (!idString) return;
+      const idCliente = Number(idString);
+
+      await favoritosService.adicionar(idCliente, id);
+      setFavoritos((atual) => [...atual, id]);
+      mostrarAviso("Favoritos", "Hospedagem adicionada aos favoritos!");
+    } catch (error: any) {
       console.error("Erro ao adicionar favorito:", error);
+      mostrarAviso("Erro", error.message || "Não foi possível favoritar.");
     }
   };
 
+  // 🔧 FIX: agora chama a API de verdade (DELETE /favoritos/:idCliente/:idProduto).
   const removerFavorito = async (id: number) => {
     try {
-      const userId = await obterIdentificadorUsuario();
-      if (userId) {
-        const novosFavoritos = favoritos.filter((favId) => favId !== id);
-        setFavoritos(novosFavoritos);
-        await AsyncStorage.setItem(
-          `favoritos_hospedagens_${userId}`,
-          JSON.stringify(novosFavoritos),
-        );
-        Alert.alert("Favoritos", "Hospedagem removida dos favoritos!");
-      }
-    } catch (error) {
+      const idString = await obterIdentificadorUsuario();
+      if (!idString) return;
+      const idCliente = Number(idString);
+
+      await favoritosService.remover(idCliente, id);
+      setFavoritos((atual) => atual.filter((favId) => favId !== id));
+      mostrarAviso("Favoritos", "Hospedagem removida dos favoritos!");
+    } catch (error: any) {
       console.error("Erro ao remover favorito:", error);
+      mostrarAviso("Erro", error.message || "Não foi possível remover.");
     }
   };
 
@@ -285,18 +300,18 @@ export default function HospedagensScreen() {
     if (!produtoSelecionado) return;
 
     if (!checkInDate || !checkOutDate) {
-      Alert.alert("Erro", "Selecione as datas de check-in e check-out");
+      mostrarAviso("Erro", "Selecione as datas de check-in e check-out");
       return;
     }
 
     const dias = calcularDias();
     if (dias <= 0) {
-      Alert.alert("Erro", "A data de check-out deve ser após o check-in");
+      mostrarAviso("Erro", "A data de check-out deve ser após o check-in");
       return;
     }
 
     if (dias > produtoSelecionado.quantidade_estoque) {
-      Alert.alert("Erro", "Quantidade de diárias indisponível");
+      mostrarAviso("Erro", "Quantidade de diárias indisponível");
       return;
     }
 
@@ -341,7 +356,7 @@ export default function HospedagensScreen() {
     if (!isLoggedIn) return;
 
     abrirDetalhes(item);
-    Alert.alert(
+    mostrarAviso(
       "Atenção",
       "Selecione as datas de check-in e check-out para continuar.",
     );
@@ -563,6 +578,8 @@ export default function HospedagensScreen() {
 
     const images = produtoSelecionado.imagem_url || [];
     const hasMultipleImages = images.length > 1;
+    // 🔧 Favorito do produto aberto no modal, pra pintar o coração certo
+    const isFavoritoModal = favoritos.includes(produtoSelecionado.id);
 
     const currentImage =
       images.length > 0
@@ -622,6 +639,22 @@ export default function HospedagensScreen() {
                     </View>
                   </>
                 )}
+
+                {/* 🆕 Botão de favoritar sobre a imagem, no modal de detalhes */}
+                <TouchableOpacity
+                  style={styles.favoritoModalBtn}
+                  onPress={() =>
+                    isFavoritoModal
+                      ? removerFavorito(produtoSelecionado.id)
+                      : adicionarFavorito(produtoSelecionado.id)
+                  }
+                >
+                  <Feather
+                    name="heart"
+                    size={22}
+                    color={isFavoritoModal ? "#FF3B30" : "#FFF"}
+                  />
+                </TouchableOpacity>
               </View>
 
               {hasMultipleImages && (
@@ -649,9 +682,27 @@ export default function HospedagensScreen() {
               )}
 
               <View style={styles.detalhesContent}>
-                <Text style={styles.detalhesTitulo}>
-                  {produtoSelecionado.nome}
-                </Text>
+                {/* 🆕 Título + botão de favoritar lado a lado */}
+                <View style={styles.detalhesTituloRow}>
+                  <Text style={styles.detalhesTitulo}>
+                    {produtoSelecionado.nome}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.detalhesFavoritoBtn}
+                    onPress={() =>
+                      isFavoritoModal
+                        ? removerFavorito(produtoSelecionado.id)
+                        : adicionarFavorito(produtoSelecionado.id)
+                    }
+                  >
+                    <Feather
+                      name="heart"
+                      size={24}
+                      color={isFavoritoModal ? "#FF3B30" : "#584128"}
+                    />
+                  </TouchableOpacity>
+                </View>
+
                 <View style={styles.detalhesPrecoContainer}>
                   <Text style={styles.detalhesPreco}>
                     {formatarPreco(produtoSelecionado.preco)} / diária
@@ -1041,6 +1092,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   imageCounterText: { color: "#FFF", fontSize: 12 },
+  // 🆕 Botão de favoritar flutuando sobre a imagem do carrossel
+  favoritoModalBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 20,
+    padding: 8,
+  },
   thumbnailScroll: { flexDirection: "row", marginBottom: 15 },
   thumbnailImage: {
     width: 60,
@@ -1051,7 +1111,15 @@ const styles = StyleSheet.create({
   },
   thumbnailImageActive: { opacity: 1, borderWidth: 2, borderColor: "#584128" },
   detalhesContent: { gap: 12 },
-  detalhesTitulo: { fontSize: 20, fontWeight: "bold", color: "#333" },
+  // 🆕 Linha do título com o botão de favoritar ao lado
+  detalhesTituloRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  detalhesTitulo: { fontSize: 20, fontWeight: "bold", color: "#333", flex: 1 },
+  detalhesFavoritoBtn: { padding: 4 },
   detalhesPrecoContainer: {
     flexDirection: "row",
     justifyContent: "space-between",

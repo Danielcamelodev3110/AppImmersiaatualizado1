@@ -1,39 +1,35 @@
-import React, { useRef, useState, useEffect } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { StatusBar } from "expo-status-bar";
+import * as WebBrowser from "expo-web-browser";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  SafeAreaView,
-  ScrollView,
-  View,
-  Text,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
+  Alert,
+  Animated,
   Dimensions,
   FlatList,
-  Platform,
-  Animated,
+  Image,
   ImageBackground,
+  Platform,
   Pressable,
-  ActivityIndicator,
-  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import { useNavigation } from '@react-navigation/native';
-import { WebView } from 'react-native-webview';
-import * as Location from 'expo-location'; 
-import { Linking } from 'react-native'; // Adicione no topo com os outros imports
-import { Modal, TextInput, SectionList } from "react-native";
-import * as WebBrowser from 'expo-web-browser'; 
 
 // TODAS AS CIDADES DO BRASIL POR ESTADO
 // COMPONENTE DE MAPA COM BUSCA POR QUALQUER CIDADE
 const CityMapComponent = () => {
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState("");
   const [selectedCity, setSelectedCity] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const searchAnyCity = async () => {
     if (!searchText.trim()) {
-      Alert.alert('Atenção', 'Digite o nome de uma cidade');
+      Alert.alert("Atenção", "Digite o nome de uma cidade");
       return;
     }
 
@@ -44,7 +40,7 @@ const CityMapComponent = () => {
       await WebBrowser.openBrowserAsync(url);
       setSelectedCity(searchText);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível abrir o mapa');
+      Alert.alert("Erro", "Não foi possível abrir o mapa");
     } finally {
       setLoading(false);
     }
@@ -52,7 +48,7 @@ const CityMapComponent = () => {
 
   const searchByCategory = async (category) => {
     if (!selectedCity && !searchText) {
-      Alert.alert('Atenção', 'Primeiro digite uma cidade');
+      Alert.alert("Atenção", "Primeiro digite uma cidade");
       return;
     }
     const cityName = selectedCity || searchText;
@@ -62,7 +58,7 @@ const CityMapComponent = () => {
 
   const searchCustom = async () => {
     if (!selectedCity && !searchText) {
-      Alert.alert('Atenção', 'Digite uma cidade');
+      Alert.alert("Atenção", "Digite uma cidade");
       return;
     }
     const cityName = selectedCity || searchText;
@@ -73,9 +69,7 @@ const CityMapComponent = () => {
   return (
     <View style={styles.mapCardNew}>
       <Text style={styles.icon}>🗺️</Text>
-      <Text style={styles.cardTitle}>
-        Digite o nome da cidade
-      </Text>
+      <Text style={styles.cardTitle}>Digite o nome da cidade</Text>
 
       {/* Campo de busca */}
       <View style={styles.searchContainerNew}>
@@ -89,22 +83,29 @@ const CityMapComponent = () => {
           onSubmitEditing={searchAnyCity}
           returnKeyType="search"
         />
-        <TouchableOpacity onPress={() => setSearchText('')}>
+        <TouchableOpacity onPress={() => setSearchText("")}>
           <Text style={styles.clearIcon}>✕</Text>
         </TouchableOpacity>
       </View>
 
       {/* Botão de buscar */}
-      <TouchableOpacity style={styles.searchButton} onPress={searchAnyCity} disabled={loading}>
+      <TouchableOpacity
+        style={styles.searchButton}
+        onPress={searchAnyCity}
+        disabled={loading}
+      >
         <Text style={styles.searchButtonText}>
-          {loading ? 'Buscando...' : ' Buscar cidade'}
+          {loading ? "Buscando..." : " Buscar cidade"}
         </Text>
       </TouchableOpacity>
 
       {/* Cidade selecionada */}
       {selectedCity && (
         <View style={styles.selectedCityBox}>
-          <Text style={styles.selectedCityText}> Cidade selecionada: {selectedCity}</Text>
+          <Text style={styles.selectedCityText}>
+            {" "}
+            Cidade selecionada: {selectedCity}
+          </Text>
         </View>
       )}
 
@@ -114,35 +115,68 @@ const CityMapComponent = () => {
           <Text style={styles.categoriesTitle}>
             O que você quer fazer em {selectedCity || searchText}?
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesScroll}>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'restaurantes' })}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoriesScroll}
+          >
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "restaurantes" })}
+            >
               <Text style={styles.categoryChipText}>Restaurantes</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'hoteis' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "hoteis" })}
+            >
               <Text style={styles.categoryChipText}>Hotéis</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'praias' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "praias" })}
+            >
               <Text style={styles.categoryChipText}> Praias</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'parques' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "parques" })}
+            >
               <Text style={styles.categoryChipText}> Parques</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'museus' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "museus" })}
+            >
               <Text style={styles.categoryChipText}>Museus</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'shoppings' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "shoppings" })}
+            >
               <Text style={styles.categoryChipText}> Shoppings</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'bares' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "bares" })}
+            >
               <Text style={styles.categoryChipText}> Bares</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.categoryChip} onPress={() => searchByCategory({ search: 'pontos+turisticos' })}>
+            <TouchableOpacity
+              style={styles.categoryChip}
+              onPress={() => searchByCategory({ search: "pontos+turisticos" })}
+            >
               <Text style={styles.categoryChipText}>Pontos Turísticos</Text>
             </TouchableOpacity>
           </ScrollView>
-          
-          <TouchableOpacity style={styles.customSearchButton} onPress={searchCustom}>
-            <Text style={styles.customSearchButtonText}>Ver tudo em {selectedCity || searchText}</Text>
+
+          <TouchableOpacity
+            style={styles.customSearchButton}
+            onPress={searchCustom}
+          >
+            <Text style={styles.customSearchButtonText}>
+              Ver tudo em {selectedCity || searchText}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -151,28 +185,76 @@ const CityMapComponent = () => {
       <View style={styles.suggestionsContainer}>
         <Text style={styles.suggestionsTitle}> Sugestões:</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Rio de Janeiro'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Rio de Janeiro");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Rio de Janeiro</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('São Paulo'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("São Paulo");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>São Paulo</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Salvador'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Salvador");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Salvador</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Gramado'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Gramado");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Gramado</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Florianópolis'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Florianópolis");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Florianópolis</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Fortaleza'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Fortaleza");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Fortaleza</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Recife'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Recife");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Recife</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.suggestionChip} onPress={() => { setSearchText('Belo Horizonte'); searchAnyCity(); }}>
+          <TouchableOpacity
+            style={styles.suggestionChip}
+            onPress={() => {
+              setSearchText("Belo Horizonte");
+              searchAnyCity();
+            }}
+          >
             <Text style={styles.suggestionChipText}>Belo Horizonte</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -611,32 +693,31 @@ export default function App() {
               titulo="EXPERIÊNCIA"
               imagem={require("../../../assets/images/exp.jpg")}
               // Agora o navigation existe neste escopo
-              onPress={() => navigation.navigate('experiencias')} 
+              onPress={() => navigation.navigate("experiencias")}
             />
             <Card
               titulo="HOSPEDAGENS"
               imagem={require("../../../assets/images/hosp.webp")}
-              onPress={() => navigation.navigate('hospedagens')}
+              onPress={() => navigation.navigate("hospedagens")}
             />
             <Card
               titulo="PACOTES"
               imagem={require("../../../assets/images/pacotes.jpg")}
-              onPress={() => navigation.navigate('pacotes')}
+              onPress={() => navigation.navigate("pacotes")}
             />
           </View>
- <View style={[styles.textContainer, { marginTop: 20}]}>
+          <View style={[styles.textContainer, { marginTop: 20 }]}>
             <Text style={styles.h3}>Experiências próximas de você:</Text>
             <View style={styles.underline} />
           </View>
 
-<CityMapComponent />
-
+          <CityMapComponent />
 
           <View style={[styles.textContainer, { marginTop: 20 }]}>
             <Text style={styles.h3}>Promoções da semana</Text>
             <View style={styles.underline} />
           </View>
-          
+
           <View style={{ height: 10 }} />
           <PacoteCarousel />
         </View>
@@ -908,104 +989,104 @@ const styles = StyleSheet.create({
     fontSize: 11, // Reduzido de 14
   },
   mapContainer: {
-  width: '100%',
-  height: 400,
-  backgroundColor: '#FFF',
-  borderRadius: 20,
-  overflow: 'hidden',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 3,
-  marginVertical: 10,
-},
-mapHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: 12,
-  backgroundColor: '#584128',
-},
-mapTitle: {
-  color: '#FFF',
-  fontSize: 14,
-  fontWeight: 'bold',
-},
-refreshButton: {
-  backgroundColor: '#EDEAE0',
-  paddingHorizontal: 12,
-  paddingVertical: 6,
-  borderRadius: 15,
-},
-refreshButtonText: {
-  color: '#584128',
-  fontSize: 12,
-  fontWeight: 'bold',
-},
-webview: {
-  flex: 1,
-  width: '100%',
-},
-loadingOverlay: {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: 'rgba(255,255,255,0.9)',
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-mapFooter: {
-  padding: 8,
-  backgroundColor: '#F5F5DC',
-  alignItems: 'center',
-},
-mapFooterText: {
-  fontSize: 11,
-  color: '#584128',
-},
-centerContent: {
-  justifyContent: 'center',
-  alignItems: 'center',
-},
-// Adicione dentro do StyleSheet
-locationIcon: {
-  fontSize: 48,
-  marginBottom: 10,
-},
-locationTitle: {
-  fontSize: 18,
-  fontWeight: 'bold',
-  color: '#584128',
-  marginBottom: 5,
-},
-locationCard: {
-  backgroundColor: '#FFF',
-  borderRadius: 20,
-  padding: 20,
-  alignItems: 'center',
-  justifyContent: 'center',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 3,
-  width: '100%',
-  minHeight: 200,
-},
-locationSubtitle: {
-  fontSize: 14,
-  color: '#666',
-  textAlign: 'center',
-  marginTop: 10,
-},
-footerButton: {
-  padding: 8,
-  alignItems: 'center',
-},
-// NOVOS ESTILOS DO MAPA COM CIDADES - ADICIONE AO FINAL DO StyleSheet
+    width: "100%",
+    height: 400,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    marginVertical: 10,
+  },
+  mapHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#584128",
+  },
+  mapTitle: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  refreshButton: {
+    backgroundColor: "#EDEAE0",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+  },
+  refreshButtonText: {
+    color: "#584128",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  webview: {
+    flex: 1,
+    width: "100%",
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mapFooter: {
+    padding: 8,
+    backgroundColor: "#F5F5DC",
+    alignItems: "center",
+  },
+  mapFooterText: {
+    fontSize: 11,
+    color: "#584128",
+  },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // Adicione dentro do StyleSheet
+  locationIcon: {
+    fontSize: 48,
+    marginBottom: 10,
+  },
+  locationTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#584128",
+    marginBottom: 5,
+  },
+  locationCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    width: "100%",
+    minHeight: 200,
+  },
+  locationSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  footerButton: {
+    padding: 8,
+    alignItems: "center",
+  },
+  // NOVOS ESTILOS DO MAPA COM CIDADES - ADICIONE AO FINAL DO StyleSheet
 
   // Estilos do novo componente CityMapComponent
   mapCardNew: {
@@ -1209,66 +1290,66 @@ footerButton: {
     lineHeight: 22,
   },
   // Novos estilos para busca de cidade
-searchContainerNew: {
-  flexDirection: "row",
-  alignItems: "center",
-  backgroundColor: "#F5F5F5",
-  borderRadius: 12,
-  paddingHorizontal: 12,
-  marginBottom: 15,
-  width: "100%",
-},
-searchInputNew: {
-  flex: 1,
-  paddingVertical: 12,
-  fontSize: 16,
-},
-searchButton: {
-  backgroundColor: "#584128",
-  paddingHorizontal: 25,
-  paddingVertical: 12,
-  borderRadius: 25,
-  width: "100%",
-  alignItems: "center",
-  marginBottom: 15,
-},
-searchButtonText: {
-  color: "#FFF",
-  fontWeight: "bold",
-  fontSize: 16,
-},
-selectedCityBox: {
-  backgroundColor: "#E8F5E9",
-  padding: 10,
-  borderRadius: 10,
-  marginBottom: 15,
-  width: "100%",
-},
-selectedCityText: {
-  fontSize: 14,
-  color: "#2E7D32",
-  textAlign: "center",
-  fontWeight: "bold",
-},
-suggestionsContainer: {
-  marginTop: 15,
-  width: "100%",
-},
-suggestionsTitle: {
-  fontSize: 14,
-  fontWeight: "bold",
-  color: "#666",
-  marginBottom: 10,
-},
-suggestionChip: {
-  backgroundColor: "#E8E8E8",
-  paddingHorizontal: 15,
-  paddingVertical: 8,
-  borderRadius: 20,
-  marginRight: 8,
-},
-suggestionChipText: {
-  fontSize: 13,
-  color: "#333",
-},
+  searchContainerNew: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    marginBottom: 15,
+    width: "100%",
+  },
+  searchInputNew: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+  },
+  searchButton: {
+    backgroundColor: "#584128",
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+    width: "100%",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  searchButtonText: {
+    color: "#FFF",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  selectedCityBox: {
+    backgroundColor: "#E8F5E9",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 15,
+    width: "100%",
+  },
+  selectedCityText: {
+    fontSize: 14,
+    color: "#2E7D32",
+    textAlign: "center",
+    fontWeight: "bold",
+  },
+  suggestionsContainer: {
+    marginTop: 15,
+    width: "100%",
+  },
+  suggestionsTitle: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#666",
+    marginBottom: 10,
+  },
+  suggestionChip: {
+    backgroundColor: "#E8E8E8",
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  suggestionChipText: {
+    fontSize: 13,
+    color: "#333",
+  },
 });

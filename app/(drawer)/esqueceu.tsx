@@ -184,9 +184,11 @@ export default function EsqueceuSenhaScreen() {
 
       <TouchableOpacity
         style={styles.btnBack}
-        onPress={() => router.back()}
+        onPress={() => router.replace('/login')}
       >
         <Ionicons name="arrow-back" size={20} color="#584128" />
+
+        
         <Text style={styles.btnBackText}>Voltar para o login</Text>
       </TouchableOpacity>
     </View>

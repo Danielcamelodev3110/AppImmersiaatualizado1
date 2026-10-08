@@ -126,9 +126,11 @@ export default function Login() {
             </View>
 
             {/* Esqueceu a senha */}
-            <TouchableOpacity style={styles.forgotContainer}>
-              <Text style={styles.forgotText}>Esqueceu a senha?</Text>
-            </TouchableOpacity>
+            <Link href="/esqueceu" asChild>
+              <TouchableOpacity style={styles.forgotContainer}>
+                <Text style={styles.forgotText}>Esqueceu a senha?</Text>
+              </TouchableOpacity>
+            </Link>
 
             {/* Botão Login */}
             <TouchableOpacity

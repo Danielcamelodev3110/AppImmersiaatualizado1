@@ -123,6 +123,14 @@ export default function PerfilScreen() {
       route: "../relatorio",
       color: "#584128",
     },
+    // 🆕 Só admin vê esse item — leva direto pro formulário de nova postagem
+    {
+      icon: "newspaper-outline",
+      title: "Adicionar Postagem Blog",
+      route: "../blog.novo",
+      color: "#8B5CF6",
+      description: "Publique uma nova postagem no blog",
+    },
   ];
 
   const getMenuItems = () => {
