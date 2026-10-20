@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
   Modal,
@@ -18,6 +19,8 @@ import {
 
 import { PostBlog, blogService } from "../../../services/Blogservice";
 import { userService } from "../../../services/userService";
+
+const { width: LARGURA_TELA } = Dimensions.get("window");
 
 const mostrarAviso = (titulo: string, mensagem: string) => {
   if (Platform.OS === "web") {
@@ -35,6 +38,22 @@ const formatarData = (data: string): string => {
   });
 };
 
+// Estimativa simples de tempo de leitura (~200 palavras por minuto)
+const tempoLeitura = (texto: string): string => {
+  const palavras = texto.trim().split(/\s+/).length;
+  const minutos = Math.max(1, Math.round(palavras / 200));
+  return `${minutos} min de leitura`;
+};
+
+// Garante sempre um array de imagens, mesmo pra posts antigos que só
+// tinham imagem_capa preenchida.
+const obterImagens = (post: PostBlog): string[] => {
+  if (Array.isArray(post.imagens) && post.imagens.length > 0) {
+    return post.imagens;
+  }
+  return post.imagem_capa ? [post.imagem_capa] : [];
+};
+
 export default function BlogScreen() {
   const router = useRouter();
 
@@ -44,6 +63,7 @@ export default function BlogScreen() {
   const [carregando, setCarregando] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [ehAdmin, setEhAdmin] = useState(false);
+  const [indiceImagem, setIndiceImagem] = useState(0);
 
   const carregarDados = useCallback(async () => {
     try {
@@ -75,69 +95,125 @@ export default function BlogScreen() {
 
   const abrirPost = (post: PostBlog) => {
     setPostSelecionado(post);
+    setIndiceImagem(0);
     setModalVisible(true);
   };
 
   const HeaderFixo = () => (
     <View style={styles.headerContainer}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        <Feather name="arrow-left" size={24} color="#584128" />
+      <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+        <Feather name="arrow-left" size={22} color="#584128" />
       </TouchableOpacity>
-      <Text style={styles.headerTitle}>Blog de Viagens</Text>
-      {/* 🔧 Botão de nova postagem só aparece pra administrador */}
+      <View style={styles.headerCentro}>
+        <Text style={styles.headerTitle}>Blog</Text>
+        <Text style={styles.headerSubtitle}>Histórias e dicas de viagem</Text>
+      </View>
+      {/* Botão de nova postagem só aparece pra administrador */}
       {ehAdmin ? (
         <TouchableOpacity
-          onPress={() => router.push("/blog-novo" as any)}
-          style={styles.headerAddButton}
+          onPress={() => router.push("/blog.novo" as any)}
+          style={[styles.headerBtn, styles.headerBtnAdd]}
         >
-          <Feather name="plus" size={22} color="#584128" />
+          <Feather name="plus" size={22} color="#FFF" />
         </TouchableOpacity>
       ) : (
-        <View style={styles.headerRight} />
+        <View style={styles.headerBtn} />
       )}
     </View>
   );
 
-  const renderPost = ({ item }: { item: PostBlog }) => (
-    <TouchableOpacity style={styles.card} onPress={() => abrirPost(item)}>
-      {item.imagem_capa ? (
-        <Image source={{ uri: item.imagem_capa }} style={styles.cardImage} />
-      ) : (
-        <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
-          <Feather name="image" size={32} color="#CCC" />
-        </View>
-      )}
+  const renderPost = ({ item, index }: { item: PostBlog; index: number }) => {
+    const imagens = obterImagens(item);
+    const capa = imagens[0];
+    // O primeiro post da lista ganha destaque (maior)
+    const destaque = index === 0;
 
-      <View style={styles.cardContent}>
-        {!!item.destino && (
-          <View style={styles.destinoBadge}>
-            <Feather name="map-pin" size={11} color="#584128" />
-            <Text style={styles.destinoBadgeText}>{item.destino}</Text>
+    return (
+      <TouchableOpacity
+        style={[styles.card, destaque && styles.cardDestaque]}
+        onPress={() => abrirPost(item)}
+        activeOpacity={0.92}
+      >
+        <View>
+          {capa ? (
+            <Image
+              source={{ uri: capa }}
+              style={[styles.cardImage, destaque && styles.cardImageDestaque]}
+            />
+          ) : (
+            <View
+              style={[
+                styles.cardImage,
+                styles.cardImagePlaceholder,
+                destaque && styles.cardImageDestaque,
+              ]}
+            >
+              <Feather name="image" size={36} color="#D9CDB8" />
+            </View>
+          )}
+
+          {/* Escurecimento leve embaixo da imagem pra dar leitura aos badges */}
+          <View style={styles.cardImageOverlay} />
+
+          <View style={styles.badgeCategoria}>
+            <Text style={styles.badgeCategoriaTexto}>{item.categoria}</Text>
           </View>
-        )}
-        <Text style={styles.cardTitulo} numberOfLines={2}>
-          {item.titulo}
-        </Text>
-        {!!item.subtitulo && (
-          <Text style={styles.cardSubtitulo} numberOfLines={2}>
-            {item.subtitulo}
-          </Text>
-        )}
-        <View style={styles.cardRodape}>
-          <Text style={styles.cardData}>
-            {formatarData(item.data_publicacao)}
-          </Text>
-          {!!item.autor?.nome_completo && (
-            <Text style={styles.cardAutor}>por {item.autor.nome_completo}</Text>
+
+          {imagens.length > 1 && (
+            <View style={styles.badgeFotos}>
+              <Feather name="image" size={12} color="#FFF" />
+              <Text style={styles.badgeFotosTexto}>{imagens.length}</Text>
+            </View>
           )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        <View style={styles.cardContent}>
+          {!!item.destino && (
+            <View style={styles.destinoRow}>
+              <Feather name="map-pin" size={13} color="#C5A87B" />
+              <Text style={styles.destinoTexto}>{item.destino}</Text>
+            </View>
+          )}
+
+          <Text
+            style={[styles.cardTitulo, destaque && styles.cardTituloDestaque]}
+            numberOfLines={2}
+          >
+            {item.titulo}
+          </Text>
+
+          {!!item.subtitulo && (
+            <Text style={styles.cardSubtitulo} numberOfLines={2}>
+              {item.subtitulo}
+            </Text>
+          )}
+
+          <View style={styles.cardDivisor} />
+
+          <View style={styles.cardRodape}>
+            <View style={styles.cardRodapeInfo}>
+              <Text style={styles.cardData}>
+                {formatarData(item.data_publicacao)}
+              </Text>
+              <Text style={styles.cardLeitura}>
+                {tempoLeitura(item.conteudo)}
+              </Text>
+            </View>
+            <View style={styles.cardLerMais}>
+              <Text style={styles.cardLerMaisTexto}>Ler</Text>
+              <Feather name="arrow-right" size={14} color="#584128" />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Feather name="book-open" size={72} color="#C5A87B" />
+      <View style={styles.emptyIconBox}>
+        <Feather name="book-open" size={44} color="#C5A87B" />
+      </View>
       <Text style={styles.emptyTitulo}>Nenhuma postagem ainda</Text>
       <Text style={styles.emptyTexto}>
         Em breve teremos histórias e dicas de viagem por aqui.
@@ -148,6 +224,9 @@ export default function BlogScreen() {
   const ModalPost = () => {
     if (!postSelecionado) return null;
 
+    const imagens = obterImagens(postSelecionado);
+    const temVarias = imagens.length > 1;
+
     return (
       <Modal
         visible={modalVisible}
@@ -155,32 +234,84 @@ export default function BlogScreen() {
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => setModalVisible(false)}
-              style={styles.modalBackButton}
-            >
-              <Feather name="arrow-left" size={24} color="#584128" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {postSelecionado.imagem_capa && (
-              <Image
-                source={{ uri: postSelecionado.imagem_capa }}
-                style={styles.modalImagemCapa}
-              />
-            )}
-
-            <View style={styles.modalConteudoContainer}>
-              {!!postSelecionado.destino && (
-                <View style={styles.destinoBadge}>
-                  <Feather name="map-pin" size={11} color="#584128" />
-                  <Text style={styles.destinoBadgeText}>
-                    {postSelecionado.destino}
-                  </Text>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+            {/* Carrossel de imagens */}
+            <View style={styles.carrosselContainer}>
+              {imagens.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onMomentumScrollEnd={(e) => {
+                    const indice = Math.round(
+                      e.nativeEvent.contentOffset.x / LARGURA_TELA,
+                    );
+                    setIndiceImagem(indice);
+                  }}
+                >
+                  {imagens.map((url, i) => (
+                    <Image
+                      key={i}
+                      source={{ uri: url }}
+                      style={styles.carrosselImagem}
+                    />
+                  ))}
+                </ScrollView>
+              ) : (
+                <View style={[styles.carrosselImagem, styles.carrosselVazio]}>
+                  <Feather name="image" size={48} color="#D9CDB8" />
                 </View>
               )}
+
+              {/* Botão de voltar sobre a imagem */}
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.modalVoltarBtn}
+              >
+                <Feather name="arrow-left" size={22} color="#584128" />
+              </TouchableOpacity>
+
+              {temVarias && (
+                <>
+                  <View style={styles.carrosselContador}>
+                    <Feather name="image" size={12} color="#FFF" />
+                    <Text style={styles.carrosselContadorTexto}>
+                      {indiceImagem + 1} / {imagens.length}
+                    </Text>
+                  </View>
+
+                  {/* Bolinhas indicadoras */}
+                  <View style={styles.carrosselDots}>
+                    {imagens.map((_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.dot,
+                          i === indiceImagem && styles.dotAtivo,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+
+            <View style={styles.modalConteudoContainer}>
+              <View style={styles.modalBadgesRow}>
+                <View style={styles.modalBadgeCategoria}>
+                  <Text style={styles.modalBadgeCategoriaTexto}>
+                    {postSelecionado.categoria}
+                  </Text>
+                </View>
+                {!!postSelecionado.destino && (
+                  <View style={styles.destinoRow}>
+                    <Feather name="map-pin" size={13} color="#C5A87B" />
+                    <Text style={styles.destinoTexto}>
+                      {postSelecionado.destino}
+                    </Text>
+                  </View>
+                )}
+              </View>
 
               <Text style={styles.modalTitulo}>{postSelecionado.titulo}</Text>
 
@@ -190,18 +321,50 @@ export default function BlogScreen() {
                 </Text>
               )}
 
-              <View style={styles.modalMeta}>
-                <Text style={styles.modalMetaTexto}>
-                  {formatarData(postSelecionado.data_publicacao)}
-                  {postSelecionado.autor?.nome_completo
-                    ? ` · por ${postSelecionado.autor.nome_completo}`
-                    : ""}
-                </Text>
+              <View style={styles.modalAutorRow}>
+                <View style={styles.modalAutorAvatar}>
+                  <Text style={styles.modalAutorAvatarTexto}>
+                    {(postSelecionado.autor?.nome_completo || "I")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={styles.modalAutorNome}>
+                    {postSelecionado.autor?.nome_completo || "Equipe Immersia"}
+                  </Text>
+                  <Text style={styles.modalMetaTexto}>
+                    {formatarData(postSelecionado.data_publicacao)} ·{" "}
+                    {tempoLeitura(postSelecionado.conteudo)}
+                  </Text>
+                </View>
               </View>
+
+              <View style={styles.modalDivisor} />
 
               <Text style={styles.modalConteudo}>
                 {postSelecionado.conteudo}
               </Text>
+
+              {/* Galeria de miniaturas no fim do post, quando há várias fotos */}
+              {temVarias && (
+                <View style={styles.galeriaContainer}>
+                  <Text style={styles.galeriaTitulo}>Galeria</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 10 }}
+                  >
+                    {imagens.map((url, i) => (
+                      <Image
+                        key={i}
+                        source={{ uri: url }}
+                        style={styles.galeriaMiniatura}
+                      />
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </ScrollView>
         </View>
@@ -239,99 +402,291 @@ export default function BlogScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#EDEAE0" },
+  container: { flex: 1, backgroundColor: "#F4EFE6" },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#EDEAE0",
+    backgroundColor: "#F4EFE6",
   },
 
+  // ===== HEADER =====
   headerContainer: {
-    height: 70,
+    paddingTop: 44,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
     backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E0E0E0",
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
+    zIndex: 2,
   },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#584128" },
-  headerAddButton: { padding: 8 },
-  headerRight: { width: 40 },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F4EFE6",
+  },
+  headerBtnAdd: { backgroundColor: "#584128" },
+  headerCentro: { alignItems: "center" },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "#2c1810" },
+  headerSubtitle: { fontSize: 12, color: "#A89677", marginTop: 1 },
 
-  lista: { padding: 16, paddingBottom: 40, gap: 16 },
+  lista: { padding: 16, paddingTop: 20, paddingBottom: 40, gap: 20 },
 
+  // ===== CARD =====
   card: {
     backgroundColor: "#FFF",
-    borderRadius: 14,
+    borderRadius: 20,
     overflow: "hidden",
-    marginBottom: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: "#584128",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 4,
   },
-  cardImage: { width: "100%", height: 160, resizeMode: "cover" },
+  cardDestaque: { borderRadius: 24 },
+  cardImage: { width: "100%", height: 170, resizeMode: "cover" },
+  cardImageDestaque: { height: 240 },
   cardImagePlaceholder: {
     backgroundColor: "#F0EBE3",
     alignItems: "center",
     justifyContent: "center",
   },
-  cardContent: { padding: 14, gap: 4 },
-  destinoBadge: {
+  cardImageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 60,
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  badgeCategoria: {
+    position: "absolute",
+    top: 14,
+    left: 14,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  badgeCategoriaTexto: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#584128",
+    letterSpacing: 0.3,
+  },
+  badgeFotos: {
+    position: "absolute",
+    top: 14,
+    right: 14,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F0EBE3",
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    marginBottom: 4,
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
-  destinoBadgeText: { fontSize: 11, color: "#584128", fontWeight: "600" },
-  cardTitulo: { fontSize: 17, fontWeight: "bold", color: "#2c1810" },
-  cardSubtitulo: { fontSize: 13, color: "#666", marginTop: 2 },
+  badgeFotosTexto: { fontSize: 11, color: "#FFF", fontWeight: "700" },
+
+  cardContent: { padding: 18 },
+  destinoRow: { flexDirection: "row", alignItems: "center", gap: 5 },
+  destinoTexto: {
+    fontSize: 12,
+    color: "#C5A87B",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  cardTitulo: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#2c1810",
+    marginTop: 8,
+    lineHeight: 25,
+  },
+  cardTituloDestaque: { fontSize: 22, lineHeight: 29 },
+  cardSubtitulo: {
+    fontSize: 14,
+    color: "#7A6F5F",
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  cardDivisor: { height: 1, backgroundColor: "#F0EBE3", marginVertical: 14 },
   cardRodape: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    alignItems: "center",
   },
-  cardData: { fontSize: 11, color: "#999" },
-  cardAutor: { fontSize: 11, color: "#999" },
+  cardRodapeInfo: { gap: 2 },
+  cardData: { fontSize: 12, color: "#8B8272", fontWeight: "600" },
+  cardLeitura: { fontSize: 11, color: "#B5AA97" },
+  cardLerMais: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#F4EFE6",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  cardLerMaisTexto: { fontSize: 13, fontWeight: "700", color: "#584128" },
 
+  // ===== VAZIO =====
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 80,
-    gap: 8,
+    gap: 10,
   },
-  emptyTitulo: { fontSize: 18, fontWeight: "bold", color: "#584128" },
+  emptyIconBox: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  emptyTitulo: { fontSize: 18, fontWeight: "800", color: "#584128" },
   emptyTexto: {
     fontSize: 13,
-    color: "#999",
+    color: "#A89677",
     textAlign: "center",
     paddingHorizontal: 40,
+    lineHeight: 19,
   },
 
+  // ===== MODAL DO POST =====
   modalContainer: { flex: 1, backgroundColor: "#FFF" },
-  modalHeader: {
-    height: 60,
+  carrosselContainer: { position: "relative" },
+  carrosselImagem: { width: LARGURA_TELA, height: 320, resizeMode: "cover" },
+  carrosselVazio: {
+    backgroundColor: "#F0EBE3",
+    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
   },
-  modalBackButton: { width: 32 },
-  modalImagemCapa: { width: "100%", height: 220, resizeMode: "cover" },
-  modalConteudoContainer: { padding: 20, gap: 8 },
-  modalTitulo: { fontSize: 24, fontWeight: "bold", color: "#2c1810" },
-  modalSubtitulo: { fontSize: 15, color: "#666" },
-  modalMeta: { marginVertical: 8 },
-  modalMetaTexto: { fontSize: 12, color: "#999" },
-  modalConteudo: { fontSize: 15, color: "#333", lineHeight: 24, marginTop: 8 },
+  modalVoltarBtn: {
+    position: "absolute",
+    top: 44,
+    left: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  carrosselContador: {
+    position: "absolute",
+    top: 50,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  carrosselContadorTexto: { fontSize: 12, color: "#FFF", fontWeight: "700" },
+  carrosselDots: {
+    position: "absolute",
+    bottom: 36,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.5)",
+  },
+  dotAtivo: { width: 20, backgroundColor: "#FFF" },
+
+  modalConteudoContainer: {
+    marginTop: -24,
+    backgroundColor: "#FFF",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 60,
+  },
+  modalBadgesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  modalBadgeCategoria: {
+    backgroundColor: "#584128",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  modalBadgeCategoriaTexto: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#FFF",
+    letterSpacing: 0.3,
+  },
+  modalTitulo: {
+    fontSize: 27,
+    fontWeight: "800",
+    color: "#2c1810",
+    marginTop: 14,
+    lineHeight: 34,
+  },
+  modalSubtitulo: {
+    fontSize: 16,
+    color: "#7A6F5F",
+    marginTop: 8,
+    lineHeight: 23,
+  },
+  modalAutorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 20,
+  },
+  modalAutorAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#584128",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalAutorAvatarTexto: { color: "#FFF", fontSize: 17, fontWeight: "800" },
+  modalAutorNome: { fontSize: 14, fontWeight: "700", color: "#2c1810" },
+  modalMetaTexto: { fontSize: 12, color: "#A89677", marginTop: 2 },
+  modalDivisor: { height: 1, backgroundColor: "#F0EBE3", marginVertical: 22 },
+  modalConteudo: { fontSize: 16, color: "#3a3228", lineHeight: 27 },
+
+  galeriaContainer: { marginTop: 32 },
+  galeriaTitulo: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#2c1810",
+    marginBottom: 12,
+  },
+  galeriaMiniatura: {
+    width: 130,
+    height: 100,
+    borderRadius: 14,
+    resizeMode: "cover",
+  },
 });

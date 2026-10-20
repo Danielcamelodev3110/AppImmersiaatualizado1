@@ -12,13 +12,14 @@ import {
 } from "react-native";
 
 import { useIdioma } from "../../constants/IdiomaContext";
+import { useTema } from "../../constants/TemaContext";
 import { IDIOMAS } from "../../constants/traducoes";
 
 export default function ConfiguracoesScreen() {
   const { idioma, setIdioma } = useIdioma();
+  const { escuro, setEscuro } = useTema();
 
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [modalIdioma, setModalIdioma] = useState(false);
 
   const idiomaAtual = IDIOMAS.find((i) => i.codigo === idioma) ?? IDIOMAS[0];
@@ -34,14 +35,6 @@ export default function ConfiguracoesScreen() {
           type: "switch" as const,
           value: notifications,
           onValueChange: setNotifications,
-        },
-        {
-          id: "darkMode",
-          title: "Modo Escuro",
-          icon: "moon-outline" as const,
-          type: "switch" as const,
-          value: darkMode,
-          onValueChange: setDarkMode,
         },
       ],
     },

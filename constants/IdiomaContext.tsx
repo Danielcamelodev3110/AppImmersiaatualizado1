@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { Alert, Platform } from "react-native";
 
+import { envolverComTema, tipoComTema } from "./TemaContext";
 import {
   assinar,
   lerCache,
@@ -71,8 +72,12 @@ const traduzirFilhos = (filhos: any, idioma: Idioma): any => {
 };
 
 // Componentes originais do React Native (lidos só na hora de usar)
-const textoOriginal = () => (require("react-native") as any).Text;
-const inputOriginal = () => (require("react-native") as any).TextInput;
+let _Text: any = null;
+let _TextInput: any = null;
+const textoOriginal = () =>
+  _Text ?? (_Text = (require("react-native") as any).Text);
+const inputOriginal = () =>
+  _TextInput ?? (_TextInput = (require("react-native") as any).TextInput);
 
 function TextTraduzido(props: any) {
   const { idioma } = useContext(IdiomaContext);
@@ -97,10 +102,15 @@ function TextInputTraduzido(props: any) {
 }
 TextInputTraduzido.displayName = "TextInput";
 
-const trocarTipo = (tipo: any) => {
-  if (tipo === textoOriginal()) return TextTraduzido;
-  if (tipo === inputOriginal()) return TextInputTraduzido;
-  return tipo;
+// Texto e campo de texto: tradução + conversão de cores do modo escuro
+const TextoComTema = envolverComTema(TextTraduzido, "Text");
+const InputComTema = envolverComTema(TextInputTraduzido, "TextInput");
+
+const trocarTipo = (tipo: any, props: any) => {
+  if (tipo === textoOriginal()) return TextoComTema;
+  if (tipo === inputOriginal()) return InputComTema;
+  // View, ScrollView, botões, ícones, StatusBar... (modo escuro)
+  return tipoComTema(tipo, props);
 };
 
 function interceptar(modulo: any, nomes: string[]) {
@@ -108,7 +118,7 @@ function interceptar(modulo: any, nomes: string[]) {
     const original = modulo?.[nome];
     if (typeof original !== "function") continue;
     modulo[nome] = function (tipo: any, ...resto: any[]) {
-      return original.call(this, trocarTipo(tipo), ...resto);
+      return original.call(this, trocarTipo(tipo, resto[0]), ...resto);
     };
   }
 }

@@ -7,7 +7,8 @@ export interface PostBlog {
   destino: string | null;
   categoria: string;
   conteudo: string;
-  imagem_capa: string | null;
+  imagem_capa: string | null; // legado: primeira imagem do array
+  imagens: string[]; // todas as imagens da postagem
   id_autor: number;
   publicado: boolean;
   data_publicacao: string;
@@ -21,7 +22,7 @@ export interface CreatePostBlogPayload {
   destino?: string;
   categoria?: string;
   conteudo: string;
-  imagem_capa?: string;
+  imagens?: string[];
   id_autor: number;
 }
 

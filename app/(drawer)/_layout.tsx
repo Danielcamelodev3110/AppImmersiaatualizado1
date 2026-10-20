@@ -8,6 +8,7 @@ import { Image, StyleSheet, View } from "react-native";
 
 import { CarrinhoProvider } from "../../constants/CarrinhoContext";
 import { IdiomaProvider } from "../../constants/IdiomaContext";
+import { TemaProvider } from "../../constants/TemaContext";
 
 // Componente de header customizado para o drawer
 function CustomDrawerHeader() {
@@ -49,185 +50,195 @@ export default function DrawerLayout() {
     // dentro dele (produto, carrinho, minhas-hospedagens etc.) conseguir
     // usar o hook useCarrinho()
     <IdiomaProvider>
-      <CarrinhoProvider>
-        <Drawer
-          drawerContent={(props) => <CustomDrawerContent {...props} />}
-          screenOptions={{
-            headerShown: true,
-            headerTitle: () => <CustomDrawerHeader />,
-            headerTitleAlign: "center",
-            headerStyle: {
-              backgroundColor: "#584128",
-            },
-            headerTintColor: "#ffffff",
+      <TemaProvider>
+        <CarrinhoProvider>
+          <Drawer
+            drawerContent={(props) => <CustomDrawerContent {...props} />}
+            screenOptions={{
+              headerShown: true,
+              headerTitle: () => <CustomDrawerHeader />,
+              headerTitleAlign: "center",
+              headerStyle: {
+                backgroundColor: "#584128",
+              },
+              headerTintColor: "#ffffff",
 
-            // ESTILIZAÇÃO DO DRAWER
-            drawerStyle: {
-              backgroundColor: "#584128",
-              width: 280,
-            },
-            drawerActiveTintColor: "#fded8f",
-            drawerInactiveTintColor: "#EDEAE0",
-            drawerLabelStyle: {
-              fontSize: 16,
-              fontWeight: "500",
-            },
-            drawerItemStyle: {
-              borderRadius: 8,
-              marginHorizontal: 12,
-              marginVertical: 4,
-            },
-            drawerActiveBackgroundColor: "rgba(255, 215, 0, 0.2)",
-          }}
-        >
-          <Drawer.Screen
-            name="(tabs)"
-            options={{
-              title: "Home",
-              drawerLabel: "Início",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons name="home-outline" size={size} color={color} />
-              ),
+              // ESTILIZAÇÃO DO DRAWER
+              drawerStyle: {
+                backgroundColor: "#584128",
+                width: 280,
+              },
+              drawerActiveTintColor: "#fded8f",
+              drawerInactiveTintColor: "#EDEAE0",
+              drawerLabelStyle: {
+                fontSize: 16,
+                fontWeight: "500",
+              },
+              drawerItemStyle: {
+                borderRadius: 8,
+                marginHorizontal: 12,
+                marginVertical: 4,
+              },
+              drawerActiveBackgroundColor: "rgba(255, 215, 0, 0.2)",
             }}
-          />
+          >
+            <Drawer.Screen
+              name="(tabs)"
+              options={{
+                title: "Home",
+                drawerLabel: "Início",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons name="home-outline" size={size} color={color} />
+                ),
+              }}
+            />
 
-          <Drawer.Screen
-            name="cadastro"
-            options={{
-              title: "Cadastro",
-              drawerLabel: "Cadastro",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons name="person-add-outline" size={size} color={color} />
-              ),
-            }}
-          />
+            <Drawer.Screen
+              name="cadastro"
+              options={{
+                title: "Cadastro",
+                drawerLabel: "Cadastro",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons
+                    name="person-add-outline"
+                    size={size}
+                    color={color}
+                  />
+                ),
+              }}
+            />
 
-          {/* 👇 NOVO ITEM: Carrinho */}
-          <Drawer.Screen
-            name="carrinho"
-            options={{
-              title: "Carrinho",
-              drawerLabel: "Carrinho",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons name="cart-outline" size={size} color={color} />
-              ),
-            }}
-          />
+            {/* 👇 NOVO ITEM: Carrinho */}
+            <Drawer.Screen
+              name="carrinho"
+              options={{
+                title: "Carrinho",
+                drawerLabel: "Carrinho",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons name="cart-outline" size={size} color={color} />
+                ),
+              }}
+            />
 
-          <Drawer.Screen
-            name="configuracoes"
-            options={{
-              title: "Configurações",
-              drawerLabel: "Configurações",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons name="settings-outline" size={size} color={color} />
-              ),
-            }}
-          />
+            <Drawer.Screen
+              name="configuracoes"
+              options={{
+                title: "Configurações",
+                drawerLabel: "Configurações",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons name="settings-outline" size={size} color={color} />
+                ),
+              }}
+            />
 
-          <Drawer.Screen
-            name="contato"
-            options={{
-              title: "Contato",
-              drawerLabel: "Contato",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons name="chatbubble-outline" size={size} color={color} />
-              ),
-            }}
-          />
+            <Drawer.Screen
+              name="contato"
+              options={{
+                title: "Contato",
+                drawerLabel: "Contato",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={size}
+                    color={color}
+                  />
+                ),
+              }}
+            />
 
-          <Drawer.Screen
-            name="sobre"
-            options={{
-              title: "Sobre",
-              drawerLabel: "Sobre",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons
-                  name="information-circle-outline"
-                  size={size}
-                  color={color}
-                />
-              ),
-            }}
-          />
+            <Drawer.Screen
+              name="sobre"
+              options={{
+                title: "Sobre",
+                drawerLabel: "Sobre",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={size}
+                    color={color}
+                  />
+                ),
+              }}
+            />
 
-          <Drawer.Screen
-            name="sair"
-            options={{
-              title: "Sair",
-              drawerLabel: "Sair",
-              drawerIcon: ({ color, size }) => (
-                <Ionicons name="log-out-outline" size={size} color={color} />
-              ),
-            }}
-          />
-          <Drawer.Screen
-            name="exemploproduto"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-          <Drawer.Screen
-            name="login"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-          <Drawer.Screen
-            name="exemploblog"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-          <Drawer.Screen
-            name="cadastrar-produto"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-          <Drawer.Screen
-            name="usuarios"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
+            <Drawer.Screen
+              name="sair"
+              options={{
+                title: "Sair",
+                drawerLabel: "Sair",
+                drawerIcon: ({ color, size }) => (
+                  <Ionicons name="log-out-outline" size={size} color={color} />
+                ),
+              }}
+            />
+            <Drawer.Screen
+              name="exemploproduto"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+            <Drawer.Screen
+              name="login"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+            <Drawer.Screen
+              name="exemploblog"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+            <Drawer.Screen
+              name="cadastrar-produto"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+            <Drawer.Screen
+              name="usuarios"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
 
-          <Drawer.Screen
-            name="termos"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
+            <Drawer.Screen
+              name="termos"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
 
-          <Drawer.Screen
-            name="minhas-hospedagens"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-          <Drawer.Screen
-            name="minhas-reservas"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-          <Drawer.Screen
-            name="meus-ganhos"
-            options={{
-              title: "",
-              drawerLabel: "",
-            }}
-          />
-        </Drawer>
-      </CarrinhoProvider>
+            <Drawer.Screen
+              name="minhas-hospedagens"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+            <Drawer.Screen
+              name="minhas-reservas"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+            <Drawer.Screen
+              name="meus-ganhos"
+              options={{
+                title: "",
+                drawerLabel: "",
+              }}
+            />
+          </Drawer>
+        </CarrinhoProvider>
+      </TemaProvider>
     </IdiomaProvider>
   );
 }

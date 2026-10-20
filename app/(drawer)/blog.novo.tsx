@@ -43,7 +43,9 @@ export default function BlogNovoScreen() {
   const [subtitulo, setSubtitulo] = useState("");
   const [destino, setDestino] = useState("");
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
-  const [imagemCapa, setImagemCapa] = useState("");
+  // 🆕 Lista de URLs de imagens (a primeira vira a capa). Começa com um
+  // campo vazio; o admin pode adicionar quantos quiser.
+  const [imagens, setImagens] = useState<string[]>([""]);
   const [conteudo, setConteudo] = useState("");
   const [publicando, setPublicando] = useState(false);
 
@@ -71,6 +73,22 @@ export default function BlogNovoScreen() {
     })();
   }, []);
 
+  const atualizarImagem = (indice: number, valor: string) => {
+    setImagens((atual) => atual.map((url, i) => (i === indice ? valor : url)));
+  };
+
+  const adicionarCampoImagem = () => {
+    setImagens((atual) => [...atual, ""]);
+  };
+
+  const removerCampoImagem = (indice: number) => {
+    setImagens((atual) => {
+      const novas = atual.filter((_, i) => i !== indice);
+      // Sempre mantém pelo menos um campo na tela
+      return novas.length > 0 ? novas : [""];
+    });
+  };
+
   const handlePublicar = async () => {
     if (!titulo.trim() || !conteudo.trim()) {
       mostrarAviso("Atenção", "Preencha pelo menos o título e o conteúdo.");
@@ -85,7 +103,7 @@ export default function BlogNovoScreen() {
         subtitulo: subtitulo.trim() || undefined,
         destino: destino.trim() || undefined,
         categoria,
-        imagem_capa: imagemCapa.trim() || undefined,
+        imagens: imagens.map((url) => url.trim()).filter((url) => url !== ""),
         conteudo: conteudo.trim(),
         id_autor: idAutor,
       });
@@ -198,15 +216,38 @@ export default function BlogNovoScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>URL da imagem de capa</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="https://..."
-          placeholderTextColor="#999"
-          value={imagemCapa}
-          onChangeText={setImagemCapa}
-          autoCapitalize="none"
-        />
+        <Text style={styles.label}>Imagens (a primeira será a capa)</Text>
+        {imagens.map((url, indice) => (
+          <View key={indice} style={styles.imagemRow}>
+            <TextInput
+              style={[styles.input, styles.imagemInput]}
+              placeholder={
+                indice === 0
+                  ? "URL da imagem de capa (https://...)"
+                  : "URL de outra imagem (https://...)"
+              }
+              placeholderTextColor="#999"
+              value={url}
+              onChangeText={(valor) => atualizarImagem(indice, valor)}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.imagemRemoverBtn}
+              onPress={() => removerCampoImagem(indice)}
+            >
+              <Feather name="trash-2" size={18} color="#FF3B30" />
+            </TouchableOpacity>
+          </View>
+        ))}
+        <TouchableOpacity
+          style={styles.imagemAdicionarBtn}
+          onPress={adicionarCampoImagem}
+        >
+          <Feather name="plus-circle" size={18} color="#584128" />
+          <Text style={styles.imagemAdicionarTexto}>
+            Adicionar outra imagem
+          </Text>
+        </TouchableOpacity>
 
         <Text style={styles.label}>Conteúdo *</Text>
         <TextInput
@@ -285,6 +326,22 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   inputConteudo: { minHeight: 160 },
+  imagemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  imagemInput: { flex: 1 },
+  imagemRemoverBtn: { padding: 10 },
+  imagemAdicionarBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+  },
+  imagemAdicionarTexto: { fontSize: 13, color: "#584128", fontWeight: "600" },
   categoriasRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   categoriaBtn: {
     paddingHorizontal: 14,
