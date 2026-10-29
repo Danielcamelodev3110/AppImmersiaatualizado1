@@ -1,5 +1,5 @@
 // app/(drawer)/esqueceu-senha.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,12 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useIdioma } from '../../constants/IdiomaContext';
+import { userService } from '../../services/userService';
+
 export default function EsqueceuSenhaScreen() {
   const router = useRouter();
+  const { idioma } = useIdioma();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -27,6 +31,22 @@ export default function EsqueceuSenhaScreen() {
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
 
+  // e-mail sempre sem espaços e em minúsculas (igual ao cadastro/login)
+  const emailNormalizado = email.trim().toLowerCase();
+
+  // mensagem que o servidor mandou (ou a padrão, se não houve resposta)
+  const mensagemDeErro = (error: any, padrao: string) =>
+    error?.response?.data?.message || padrao;
+
+  // contagem regressiva do botão "Reenviar" (o servidor só manda outro
+  // código depois de 60 segundos)
+  const [segundosReenvio, setSegundosReenvio] = useState(0);
+  useEffect(() => {
+    if (segundosReenvio <= 0) return;
+    const timer = setTimeout(() => setSegundosReenvio((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [segundosReenvio]);
+
   // ===== ENVIAR EMAIL DE RECUPERAÇÃO =====
   const handleSendEmail = async () => {
     if (!email.trim()) {
@@ -36,25 +56,29 @@ export default function EsqueceuSenhaScreen() {
 
     // Validação simples de e-mail
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(emailNormalizado)) {
       Alert.alert('Erro', 'Digite um e-mail válido.');
       return;
     }
 
     setLoading(true);
     try {
-      // Simula envio de e-mail
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await userService.esqueciSenha(emailNormalizado, idioma);
+
       setEmailSent(true);
+      setCodigo('');
       setStep(2);
+      setSegundosReenvio(60);
       Alert.alert(
         '✅ E-mail enviado!',
-        `Enviamos um código de verificação para ${email}. Verifique sua caixa de entrada.`,
+        `Se esse e-mail estiver cadastrado, enviamos um código de verificação para ${emailNormalizado}. Verifique sua caixa de entrada e o spam.`,
         [{ text: 'OK' }]
       );
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível enviar o e-mail. Tente novamente.');
+    } catch (error: any) {
+      Alert.alert(
+        'Erro',
+        mensagemDeErro(error, 'Não foi possível enviar o e-mail. Tente novamente.')
+      );
     } finally {
       setLoading(false);
     }
@@ -74,18 +98,15 @@ export default function EsqueceuSenhaScreen() {
 
     setLoading(true);
     try {
-      // Simula verificação do código
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Código de exemplo: 123456
-      if (codigo === '123456') {
-        setStep(3);
-        Alert.alert('✅ Código verificado!', 'Agora você pode criar uma nova senha.');
-      } else {
-        Alert.alert('Erro', 'Código inválido. Tente novamente.');
-      }
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível verificar o código. Tente novamente.');
+      await userService.verificarCodigo(emailNormalizado, codigo);
+
+      setStep(3);
+      Alert.alert('✅ Código verificado!', 'Agora você pode criar uma nova senha.');
+    } catch (error: any) {
+      Alert.alert(
+        'Erro',
+        mensagemDeErro(error, 'Não foi possível verificar o código. Tente novamente.')
+      );
     } finally {
       setLoading(false);
     }
@@ -93,12 +114,17 @@ export default function EsqueceuSenhaScreen() {
 
   // ===== REENVIAR CÓDIGO =====
   const handleResendCode = async () => {
+    if (segundosReenvio > 0) return;
+
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      Alert.alert('✅ Código reenviado!', `Um novo código foi enviado para ${email}.`);
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível reenviar o código.');
+      await userService.esqueciSenha(emailNormalizado, idioma);
+
+      setCodigo('');
+      setSegundosReenvio(60);
+      Alert.alert('✅ Código reenviado!', `Um novo código foi enviado para ${emailNormalizado}.`);
+    } catch (error: any) {
+      Alert.alert('Erro', mensagemDeErro(error, 'Não foi possível reenviar o código.'));
     } finally {
       setLoading(false);
     }
@@ -123,8 +149,10 @@ export default function EsqueceuSenhaScreen() {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await userService.redefinirSenha(emailNormalizado, codigo, novaSenha);
+
+      setNovaSenha('');
+      setConfirmarSenha('');
       Alert.alert(
         '✅ Senha redefinida!',
         'Sua senha foi alterada com sucesso. Faça login com sua nova senha.',
@@ -135,8 +163,17 @@ export default function EsqueceuSenhaScreen() {
           },
         ]
       );
-    } catch (error) {
-      Alert.alert('Erro', 'Não foi possível redefinir a senha. Tente novamente.');
+    } catch (error: any) {
+      Alert.alert(
+        'Erro',
+        mensagemDeErro(error, 'Não foi possível redefinir a senha. Tente novamente.')
+      );
+      // código vencido/inválido/bloqueado: volta pro passo do código
+      const status = error?.response?.status;
+      if (status === 400 || status === 429) {
+        setCodigo('');
+        setStep(2);
+      }
     } finally {
       setLoading(false);
     }
@@ -214,7 +251,7 @@ export default function EsqueceuSenhaScreen() {
             placeholder="Digite o código"
             placeholderTextColor="#999"
             value={codigo}
-            onChangeText={setCodigo}
+            onChangeText={(texto) => setCodigo(texto.replace(/\D/g, ''))}
             keyboardType="numeric"
             maxLength={6}
           />
@@ -234,17 +271,22 @@ export default function EsqueceuSenhaScreen() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={styles.btnResend}
+        style={[styles.btnResend, segundosReenvio > 0 && { opacity: 0.5 }]}
         onPress={handleResendCode}
-        disabled={loading}
+        disabled={loading || segundosReenvio > 0}
       >
-        <Text style={styles.btnResendText}>Não recebeu o código? Reenviar</Text>
+        <Text style={styles.btnResendText}>
+          {segundosReenvio > 0
+            ? `Reenviar em ${segundosReenvio}s`
+            : 'Não recebeu o código? Reenviar'}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.btnBack}
         onPress={() => {
           setStep(1);
+          setCodigo('');
           setEmailSent(false);
         }}
       >
