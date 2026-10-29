@@ -108,6 +108,49 @@ export const userService = {
     }
   },
 
+  // ---------- Recuperação de senha (código enviado por e-mail) ----------
+  // Os erros seguem o mesmo formato das outras chamadas: error.response.data.message
+  _postRecuperacao: async (rota: string, corpo: object) => {
+    const response = await fetch(`${BASE_URL}/users/${rota}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+
+    let dados: any = null;
+    try {
+      dados = await response.json();
+    } catch {
+      dados = null; // resposta que não é JSON (ex.: página de erro do servidor)
+    }
+
+    if (!response.ok) {
+      const erroInstancia = new Error(dados?.message || "Erro no servidor.");
+      (erroInstancia as any).response = {
+        data: dados || {},
+        status: response.status,
+      };
+      throw erroInstancia;
+    }
+    return dados;
+  },
+
+  // 1) pede o código por e-mail
+  esqueciSenha: async (email: string, idioma: "pt" | "en" | "es" = "pt") =>
+    userService._postRecuperacao("esqueci-senha", { email, idioma }),
+
+  // 2) confere o código
+  verificarCodigo: async (email: string, codigo: string) =>
+    userService._postRecuperacao("verificar-codigo", { email, codigo }),
+
+  // 3) define a nova senha (o código é conferido de novo no servidor)
+  redefinirSenha: async (email: string, codigo: string, novaSenha: string) =>
+    userService._postRecuperacao("redefinir-senha", {
+      email,
+      codigo,
+      nova_senha: novaSenha,
+    }),
+
   getSavedSession: async () => {
     try {
       let sessaoString = null;

@@ -897,6 +897,41 @@ const DICIONARIO: Record<string, [string, string]> = {
   "Redefinir senha": ["Reset password", "Restablecer contraseña"],
   "Recuperação segura": ["Secure recovery", "Recuperación segura"],
 
+  // ---------- Recuperar senha (mensagens do servidor) ----------
+  "Informe um e-mail válido.": [
+    "Enter a valid email.",
+    "Ingresa un correo válido.",
+  ],
+  "Código inválido ou expirado. Solicite um novo código.": [
+    "Invalid or expired code. Request a new code.",
+    "Código inválido o expirado. Solicita un nuevo código.",
+  ],
+  "Muitas tentativas. Solicite um novo código.": [
+    "Too many attempts. Request a new code.",
+    "Demasiados intentos. Solicita un nuevo código.",
+  ],
+  "A nova senha deve ter entre 6 e 72 caracteres.": [
+    "The new password must be between 6 and 72 characters.",
+    "La nueva contraseña debe tener entre 6 y 72 caracteres.",
+  ],
+  "Senha redefinida com sucesso.": [
+    "Password reset successfully.",
+    "Contraseña restablecida con éxito.",
+  ],
+  "Não foi possível enviar o e-mail de recuperação. Tente novamente em instantes.":
+    [
+      "Could not send the recovery email. Please try again in a moment.",
+      "No fue posible enviar el correo de recuperación. Inténtalo de nuevo en unos instantes.",
+    ],
+  "O envio de e-mail ainda não está configurado no servidor.": [
+    "Email sending is not configured on the server yet.",
+    "El envío de correos aún no está configurado en el servidor.",
+  ],
+  "Muitas solicitações. Aguarde alguns minutos e tente novamente.": [
+    "Too many requests. Wait a few minutes and try again.",
+    "Demasiadas solicitudes. Espera unos minutos e inténtalo de nuevo.",
+  ],
+
   // ---------- Reserva / produto / blog artigo ----------
   "Por favor, selecione as datas de check-in e check-out.": [
     "Please select check-in and check-out dates.",
@@ -1305,6 +1340,17 @@ const DICIONARIO: Record<string, [string, string]> = {
 // $1, $2... recebem os trechos capturados pela expressão.
 // ---------------------------------------------------------------------
 const PADROES: { regex: RegExp; en: string; es: string }[] = [
+  {
+    regex:
+      /^Se esse e-mail estiver cadastrado, enviamos um código de verificação para ([\s\S]+)\. Verifique sua caixa de entrada e o spam\.$/,
+    en: "If that email is registered, we sent a verification code to $1. Check your inbox and spam folder.",
+    es: "Si ese correo está registrado, enviamos un código de verificación a $1. Revisa tu bandeja de entrada y el spam.",
+  },
+  {
+    regex: /^Reenviar em (\d+)s$/,
+    en: "Resend in $1s",
+    es: "Reenviar en $1s",
+  },
   {
     regex: /^Mostrando todos os (\d+) artigos$/,
     en: "Showing all $1 articles",
