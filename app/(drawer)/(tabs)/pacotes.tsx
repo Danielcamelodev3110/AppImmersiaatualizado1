@@ -19,7 +19,10 @@ import {
 
 // 🔧 Ajuste os caminhos conforme a pasta onde esse arquivo ficar
 // (aqui segui o mesmo padrão de hospedagens.tsx e experiencias.tsx).
-import { useCarrinho } from "../../../constants/CarrinhoContext";
+import {
+  DESCONTO_PACOTE_PERCENTUAL,
+  useCarrinho,
+} from "../../../constants/CarrinhoContext";
 import { produtoService } from "../../../services/ProdutoService";
 
 interface Produto {
@@ -117,7 +120,8 @@ const calcularDiarias = (entrada: Date | null, saida: Date | null): number => {
 
 export default function PacotesScreen() {
   const router = useRouter();
-  const { adicionarAoCarrinho: adicionarNoContexto } = useCarrinho();
+  const { adicionarPacoteAoCarrinho: adicionarPacoteNoContexto } =
+    useCarrinho();
 
   const [etapa, setEtapa] = useState(0);
   const [carregando, setCarregando] = useState(true);
@@ -182,7 +186,36 @@ export default function PacotesScreen() {
     0,
   );
 
-  const totalPacote = totalHospedagem + totalExperiencias;
+  // Subtotal do pacote, sem desconto
+  const subtotalPacote = totalHospedagem + totalExperiencias;
+
+  // O desconto só vale com hospedagem (com datas) + pelo menos uma
+  // experiência — é isso que faz dele um "pacote".
+  const pacoteCompleto =
+    !!hospedagemSel && diarias > 0 && experienciasSelecionadas.length > 0;
+
+  // Mesma conta do backend e do carrinho: arredonda o valor de cada item,
+  // aplica o percentual e arredonda de novo, item por item.
+  const descontoDoItem = (valorItem: number): number => {
+    const base = Number(valorItem.toFixed(2));
+    return Number((base * (DESCONTO_PACOTE_PERCENTUAL / 100)).toFixed(2));
+  };
+
+  const descontoPacote = pacoteCompleto
+    ? Number(
+        (
+          descontoDoItem(totalHospedagem) +
+          experienciasSelecionadas.reduce(
+            (soma, { produto, quantidade }) =>
+              soma + descontoDoItem(produto.preco * quantidade),
+            0,
+          )
+        ).toFixed(2),
+      )
+    : 0;
+
+  // Total do pacote já com o desconto (a taxa da plataforma é somada no carrinho)
+  const totalPacote = Number((subtotalPacote - descontoPacote).toFixed(2));
 
   // ===== CALENDÁRIO =====
   const abrirCalendario = (tipo: "checkin" | "checkout") => {
@@ -299,24 +332,25 @@ export default function PacotesScreen() {
 
     setAdicionando(true);
 
-    // A hospedagem entra com as datas e a quantidade = número de diárias
-    adicionarNoContexto(
+    // O pacote inteiro entra de uma vez, marcado como pacote (é isso que
+    // libera o desconto no carrinho, no pagamento e no backend):
+    // - a hospedagem com as datas e quantidade = número de diárias
+    // - cada experiência com a quantidade de vagas escolhida
+    adicionarPacoteNoContexto([
       {
-        id: hospedagemSel.id,
-        nome: hospedagemSel.nome,
-        preco: hospedagemSel.preco,
-        imagem_url: hospedagemSel.imagem_url?.[0],
-        tipo_produto: "hospedagem",
-        data_checkin: formatarDataISO(checkIn),
-        data_checkout: formatarDataISO(checkOut),
+        produto: {
+          id: hospedagemSel.id,
+          nome: hospedagemSel.nome,
+          preco: hospedagemSel.preco,
+          imagem_url: hospedagemSel.imagem_url?.[0],
+          tipo_produto: "hospedagem",
+          data_checkin: formatarDataISO(checkIn),
+          data_checkout: formatarDataISO(checkOut),
+        },
+        quantidade: diarias,
       },
-      diarias,
-    );
-
-    // Cada experiência entra com a quantidade de vagas escolhida
-    experienciasSelecionadas.forEach(({ produto, quantidade }) => {
-      adicionarNoContexto(
-        {
+      ...experienciasSelecionadas.map(({ produto, quantidade }) => ({
+        produto: {
           id: produto.id,
           nome: produto.nome,
           preco: produto.preco,
@@ -326,8 +360,8 @@ export default function PacotesScreen() {
           data_checkout: undefined,
         },
         quantidade,
-      );
-    });
+      })),
+    ]);
 
     // Limpa o montador pra poder criar outro pacote depois
     setEtapa(0);
@@ -629,14 +663,42 @@ export default function PacotesScreen() {
           ))}
         </View>
 
+        <View style={styles.resumoLista}>
+          <View style={styles.resumoLinha}>
+            <Text style={styles.resumoLinhaNome}>Subtotal</Text>
+            <Text style={styles.resumoLinhaValor}>
+              {formatarPreco(subtotalPacote)}
+            </Text>
+          </View>
+          <View style={[styles.resumoLinha, styles.resumoLinhaSemBorda]}>
+            <Text style={styles.resumoDescontoLabel}>
+              Desconto do pacote ({DESCONTO_PACOTE_PERCENTUAL}%)
+            </Text>
+            <Text style={styles.resumoDescontoValor}>
+              - {formatarPreco(descontoPacote)}
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.resumoTotalBox}>
           <Text style={styles.resumoTotalLabel}>Total do pacote</Text>
           <Text style={styles.resumoTotalValor}>
             {formatarPreco(totalPacote)}
           </Text>
         </View>
+
+        {descontoPacote > 0 && (
+          <View style={styles.economiaBox}>
+            <Feather name="gift" size={16} color="#1a7a42" />
+            <Text style={styles.economiaTexto}>
+              Você economiza {formatarPreco(descontoPacote)} montando seu pacote
+            </Text>
+          </View>
+        )}
+
         <Text style={styles.resumoNota}>
-          Taxas e cupons de desconto são aplicados no carrinho.
+          A taxa da plataforma é somada no carrinho. Cupons não acumulam com o
+          desconto do pacote.
         </Text>
       </ScrollView>
     );
@@ -756,6 +818,16 @@ export default function PacotesScreen() {
         <View style={styles.headerBtn} />
       </View>
 
+      {/* Banner da oferta — muda de texto conforme o cliente avança */}
+      <View style={styles.banner}>
+        <Feather name="gift" size={18} color="#1a7a42" />
+        <Text style={styles.bannerTexto}>
+          {pacoteCompleto
+            ? `Pacote completo! Você ganhou ${DESCONTO_PACOTE_PERCENTUAL}% de desconto em todos os itens.`
+            : `Monte seu pacote com hospedagem + experiência e ganhe ${DESCONTO_PACOTE_PERCENTUAL}% de desconto em todos os itens.`}
+        </Text>
+      </View>
+
       {renderEtapas()}
 
       <View style={styles.conteudo}>
@@ -800,6 +872,11 @@ export default function PacotesScreen() {
       <View style={styles.rodape}>
         <View style={styles.rodapeTotal}>
           <Text style={styles.rodapeTotalLabel}>Total do pacote</Text>
+          {descontoPacote > 0 && (
+            <Text style={styles.rodapeValorCheio}>
+              {formatarPreco(subtotalPacote)}
+            </Text>
+          )}
           <Text style={styles.rodapeTotalValor}>
             {formatarPreco(totalPacote)}
           </Text>
@@ -868,6 +945,20 @@ const styles = StyleSheet.create({
   headerCentro: { alignItems: "center" },
   headerTitulo: { fontSize: 18, fontWeight: "bold", color: "#584128" },
   headerSubtitulo: { fontSize: 12, color: "#A89677", marginTop: 1 },
+
+  // ===== BANNER DA OFERTA =====
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#d5f5e3",
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  bannerTexto: { flex: 1, fontSize: 13, color: "#1a7a42", fontWeight: "600" },
 
   // ===== ETAPAS =====
   etapasContainer: {
@@ -1052,6 +1143,20 @@ const styles = StyleSheet.create({
   },
   resumoLinhaNome: { fontSize: 14, fontWeight: "600", color: "#2c1810" },
   resumoLinhaValor: { fontSize: 14, fontWeight: "bold", color: "#584128" },
+  resumoLinhaSemBorda: { borderBottomWidth: 0 },
+  resumoDescontoLabel: { fontSize: 14, color: "#1a7a42", fontWeight: "600" },
+  resumoDescontoValor: { fontSize: 14, color: "#1a7a42", fontWeight: "bold" },
+  economiaBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#d5f5e3",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+  },
+  economiaTexto: { fontSize: 13, color: "#1a7a42", fontWeight: "700" },
   resumoTotalBox: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1084,6 +1189,11 @@ const styles = StyleSheet.create({
   },
   rodapeTotal: { flexShrink: 1 },
   rodapeTotalLabel: { fontSize: 11, color: "#8B8272" },
+  rodapeValorCheio: {
+    fontSize: 11,
+    color: "#999",
+    textDecorationLine: "line-through",
+  },
   rodapeTotalValor: { fontSize: 18, fontWeight: "bold", color: "#584128" },
   btnPrimario: {
     flexDirection: "row",

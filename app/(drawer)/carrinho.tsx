@@ -18,7 +18,10 @@ import {
 import {} from "../../services/carrinho.service";
 
 // � Importação do contexto e da taxa vinda do seu serviço
-import { useCarrinho } from "../../constants/CarrinhoContext";
+import {
+  DESCONTO_PACOTE_PERCENTUAL,
+  useCarrinho,
+} from "../../constants/CarrinhoContext";
 
 // �🔧 FIX: o service não exporta "taxa_plataforma" — esse import estava
 // trazendo `undefined`, e por isso a taxa aparecia zerada no carrinho.
@@ -29,9 +32,6 @@ import { useCarrinho } from "../../constants/CarrinhoContext";
 // atualizar aqui também (ou, melhor ainda, criar um endpoint tipo
 // GET /config que devolva esse percentual pro front consultar).
 const taxa_plataforma = 0.1;
-
-// Mesma URL de produção já usada em pagamentos.service.js
-const API_URL = "https://back-immercia.onrender.com";
 
 // ===== IMAGENS DAS RECOMENDAÇÕES =====
 const canecaImage = require("../../assets/images/caneca.jpg");
@@ -64,11 +64,19 @@ const Carrinho: React.FC = () => {
     atualizarQuantidade,
     limparCarrinho,
     totalPreco,
+    // 🔧 Cupom agora vem do contexto (compartilhado com Pagamento.tsx)
+    cupomAplicado,
+    aplicandoCupom,
+    aplicarCupom: aplicarCupomContexto,
+    removerCupom,
+    valorDesconto,
+    // 🆕 Desconto de pacote (hospedagem + experiência montados juntos)
+    pacoteAtivo,
+    descontoPacote,
+    itemTemDescontoPacote,
   } = useCarrinho();
 
   const [cupom, setCupom] = useState("");
-  const [cupomAplicado, setCupomAplicado] = useState<string | null>(null);
-  const [desconto, setDesconto] = useState(0);
   const [cupomFeedback, setCupomFeedback] = useState({
     mensagem: "",
     tipo: "",
@@ -76,7 +84,6 @@ const Carrinho: React.FC = () => {
 
   const [modalDetalhamentoVisible, setModalDetalhamentoVisible] =
     useState(false);
-  const [loading, setLoading] = useState(false);
 
   const recomendacoes: Recomendacao[] = [
     { id: 1, nome: "Caneca Personalizada", preco: 39.9, imagem: canecaImage },
@@ -91,9 +98,12 @@ const Carrinho: React.FC = () => {
   ];
 
   // ===== CÁLCULOS UTILIZANDO A TAXA DO SERVICE =====
+  // 🔧 valorDesconto agora vem do contexto (calculado a partir do
+  // cupomAplicado validado de verdade contra a API)
   const subtotal = totalPreco;
-  const valorDesconto = (subtotal * desconto) / 100;
-  const subtotalComDesconto = subtotal - valorDesconto;
+  // O desconto de pacote e o de cupom não acumulam (o contexto zera um
+  // quando o outro entra), então na prática só um deles é > 0.
+  const subtotalComDesconto = subtotal - valorDesconto - descontoPacote;
 
   // Trata a taxa vinda do service (seja decimal 0.08 ou porcentagem 8)
   const taxaPercentual =
@@ -104,62 +114,45 @@ const Carrinho: React.FC = () => {
   const taxaAplicativo = subtotalComDesconto * taxaPercentual;
   const total = subtotalComDesconto + taxaAplicativo;
 
-  // Valida o cupom no backend (existe, ativo, dentro da validade, valor
-  // mínimo, já resgatado pelo cliente e ainda não usado). O cupom só é
-  // CONSUMIDO depois que o pagamento for aprovado.
+  // 🔧 FIX: agora valida de verdade contra a API (tabela cupons), em vez
+  // de comparar com códigos fixos no código do app. Exige estar logado e
+  // já ter resgatado o cupom na tela de Cupons.
   const aplicarCupom = async () => {
     const codigo = cupom.trim().toUpperCase();
 
-    const mostrarFeedback = (mensagem: string, tipo: "success" | "error") => {
-      setCupomFeedback({ mensagem, tipo });
-      setTimeout(() => setCupomFeedback({ mensagem: "", tipo: "" }), 3000);
-    };
-
     if (codigo === "") {
-      mostrarFeedback("Digite um código de cupom", "error");
+      setCupomFeedback({
+        mensagem: "Digite um código de cupom",
+        tipo: "error",
+      });
+      setTimeout(() => setCupomFeedback({ mensagem: "", tipo: "" }), 3000);
       return;
     }
 
     const idClienteSalvo = await AsyncStorage.getItem("userId");
-    if (!idClienteSalvo) {
-      mostrarFeedback("Faça login para usar um cupom", "error");
+    const idCliente = idClienteSalvo ? Number(idClienteSalvo) : null;
+
+    if (!idCliente) {
+      setCupomFeedback({
+        mensagem: "Faça login para aplicar um cupom",
+        tipo: "error",
+      });
+      setTimeout(() => setCupomFeedback({ mensagem: "", tipo: "" }), 3000);
       return;
     }
 
-    try {
-      const response = await fetch(
-        `${API_URL}/cupons/${encodeURIComponent(codigo)}/validar`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id_cliente: Number(idClienteSalvo),
-            valor_compra: subtotal,
-          }),
-        },
-      );
-      const dados = await response.json();
-      if (!response.ok) throw new Error(dados.message || "Cupom inválido.");
-
-      const percentual = Number(dados.percentual_desconto);
-      setCupomAplicado(dados.codigo);
-      setDesconto(percentual);
+    const resultado = await aplicarCupomContexto(codigo, idCliente);
+    setCupomFeedback({
+      mensagem: resultado.mensagem,
+      tipo: resultado.sucesso ? "success" : "error",
+    });
+    if (resultado.sucesso) {
       setCupom("");
-      mostrarFeedback(
-        `Cupom aplicado com sucesso! ${percentual}% de desconto`,
-        "success",
-      );
-    } catch (error: any) {
-      mostrarFeedback(
-        error.message || "Código inválido. Tente novamente.",
-        "error",
-      );
     }
-  };
 
-  const removerCupom = () => {
-    setCupomAplicado(null);
-    setDesconto(0);
+    setTimeout(() => {
+      setCupomFeedback({ mensagem: "", tipo: "" });
+    }, 3000);
   };
 
   // ===== FINALIZAR COMPRA & ENVIAR PARA O BACKEND =====
@@ -186,53 +179,12 @@ const Carrinho: React.FC = () => {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const itemPrincipal = itens[0];
-
-      const response = await fetch(`${API_URL}/reservas`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id_cliente: idCliente,
-          id_produto: itemPrincipal.produto.id,
-          quantidade: itemPrincipal.quantidade,
-          data_checkin: itemPrincipal.produto.data_checkin || null,
-          data_checkout: itemPrincipal.produto.data_checkout || null,
-          observacoes: "",
-        }),
-      });
-
-      const reservaCriada = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          reservaCriada.message || "Erro ao salvar a reserva no servidor.",
-        );
-      }
-
-      router.push({
-        pathname: "/pagamento",
-        params: {
-          reservaId: reservaCriada.id,
-          codigoReserva: reservaCriada.codigo_reserva,
-          taxaPlataforma: String(reservaCriada.taxa_plataforma),
-          total: String(reservaCriada.preco_total),
-          // cupom aplicado no carrinho — a tela de pagamento mostra a
-          // linha de desconto e envia o código junto com a reserva
-          codigoCupom: cupomAplicado ?? "",
-          descontoPercentual: String(desconto),
-        },
-      });
-    } catch (error: any) {
-      Alert.alert(
-        "Erro ao processar",
-        error.message || "Não foi possível registrar a reserva.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    // 🔧 FIX: o carrinho NÃO cria mais a reserva. Antes ele criava uma
+    // reserva "pendente" aqui e a tela de Pagamento criava outra "confirmada"
+    // (duplicando a reserva e abatendo o estoque duas vezes). Agora toda a
+    // criação de reserva + pagamento acontece só em pagamento.tsx, que já
+    // manda o cupom e o desconto de pacote pro backend.
+    router.push("/pagamento");
   };
 
   // ===== MODAL DE DETALHAMENTO =====
@@ -263,10 +215,22 @@ const Carrinho: React.FC = () => {
             </Text>
           </View>
 
-          {desconto > 0 && (
+          {descontoPacote > 0 && (
             <View style={styles.modalDetalheLinha}>
               <Text style={styles.modalDetalheLabel}>
-                Desconto ({cupomAplicado} · {desconto}%)
+                Desconto do pacote ({DESCONTO_PACOTE_PERCENTUAL}%)
+              </Text>
+              <Text style={[styles.modalDetalheValor, styles.corDesconto]}>
+                - {formatarMoeda(descontoPacote)}
+              </Text>
+            </View>
+          )}
+
+          {valorDesconto > 0 && (
+            <View style={styles.modalDetalheLinha}>
+              <Text style={styles.modalDetalheLabel}>
+                Desconto ({cupomAplicado?.codigo} ·{" "}
+                {cupomAplicado?.percentual_desconto}%)
               </Text>
               <Text style={[styles.modalDetalheValor, styles.corDesconto]}>
                 - {formatarMoeda(valorDesconto)}
@@ -405,6 +369,15 @@ const Carrinho: React.FC = () => {
                           {item.produto.nome}
                         </Text>
 
+                        {itemTemDescontoPacote(item) && (
+                          <View style={styles.seloPacote}>
+                            <Feather name="gift" size={11} color="#1a7a42" />
+                            <Text style={styles.seloPacoteTexto}>
+                              Pacote · {DESCONTO_PACOTE_PERCENTUAL}% off
+                            </Text>
+                          </View>
+                        )}
+
                         {temPeriodo && (
                           <View style={styles.produtoDatasBtn}>
                             <Feather
@@ -534,22 +507,31 @@ const Carrinho: React.FC = () => {
                     placeholderTextColor="#999"
                     value={cupom}
                     onChangeText={setCupom}
-                    editable={!cupomAplicado}
+                    editable={!cupomAplicado && !pacoteAtivo}
                   />
                   <TouchableOpacity
                     style={[
                       styles.btnAplicarCupom,
-                      cupomAplicado && styles.btnAplicarCupomDisabled,
+                      (!!cupomAplicado || aplicandoCupom || pacoteAtivo) &&
+                        styles.btnAplicarCupomDisabled,
                     ]}
                     onPress={aplicarCupom}
-                    disabled={!!cupomAplicado}
+                    disabled={!!cupomAplicado || aplicandoCupom || pacoteAtivo}
                   >
-                    <Text style={styles.btnAplicarCupomText}>Aplicar</Text>
+                    <Text style={styles.btnAplicarCupomText}>
+                      {aplicandoCupom ? "..." : "Aplicar"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* 🔧 FIX: "" && (...) renderiza uma string vazia como filho da View.
                     Forçamos !! para garantir um booleano real. */}
+                {pacoteAtivo && (
+                  <Text style={styles.avisoPacoteCupom}>
+                    Cupons não acumulam com o desconto de pacote.
+                  </Text>
+                )}
+
                 {!!cupomFeedback.mensagem && (
                   <Text
                     style={[
@@ -566,7 +548,8 @@ const Carrinho: React.FC = () => {
                 {!!cupomAplicado && (
                   <View style={styles.cupomAplicado}>
                     <Text style={styles.cupomAplicadoText}>
-                      {cupomAplicado} - {desconto}% OFF
+                      {cupomAplicado?.codigo} -{" "}
+                      {cupomAplicado?.percentual_desconto}% OFF
                     </Text>
                     <TouchableOpacity onPress={removerCupom}>
                       <Text style={styles.cupomRemover}>✕</Text>
@@ -575,7 +558,18 @@ const Carrinho: React.FC = () => {
                 )}
               </View>
 
-              {desconto > 0 && (
+              {descontoPacote > 0 && (
+                <View style={[styles.resumoLinha, styles.resumoLinhaDesconto]}>
+                  <Text style={styles.resumoLinhaLabel}>
+                    Desconto do pacote ({DESCONTO_PACOTE_PERCENTUAL}%)
+                  </Text>
+                  <Text style={styles.resumoLinhaValor}>
+                    - {formatarMoeda(descontoPacote)}
+                  </Text>
+                </View>
+              )}
+
+              {valorDesconto > 0 && (
                 <View style={[styles.resumoLinha, styles.resumoLinhaDesconto]}>
                   <Text style={styles.resumoLinhaLabel}>Desconto</Text>
                   <Text style={styles.resumoLinhaValor}>
@@ -615,15 +609,12 @@ const Carrinho: React.FC = () => {
               <TouchableOpacity
                 style={[
                   styles.btnFinalizar,
-                  (itens.length === 0 || loading) &&
-                    styles.btnFinalizarDisabled,
+                  itens.length === 0 && styles.btnFinalizarDisabled,
                 ]}
                 onPress={finalizarCompra}
-                disabled={itens.length === 0 || loading}
+                disabled={itens.length === 0}
               >
-                <Text style={styles.btnFinalizarText}>
-                  {loading ? "Processando..." : "Finalizar Compra"}
-                </Text>
+                <Text style={styles.btnFinalizarText}>Finalizar Compra</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -833,6 +824,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#2c1810",
     marginBottom: 4,
+  },
+  seloPacote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "#d5f5e3",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  seloPacoteTexto: { fontSize: 11, fontWeight: "700", color: "#1a7a42" },
+  avisoPacoteCupom: {
+    fontSize: 12,
+    color: "#8B8272",
+    marginTop: 4,
   },
   produtoDatasBtn: {
     flexDirection: "row",
@@ -1225,3 +1233,4 @@ const styles = StyleSheet.create({
 });
 
 export default Carrinho;
+\\\\

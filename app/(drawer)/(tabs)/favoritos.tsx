@@ -34,6 +34,38 @@ const formatarMoeda = (valor: number): string =>
     .toFixed(2)
     .replace(".", ",")}`;
 
+// 🔧 O backend devolve imagem_url como texto JSON (["url1", "url2"]),
+// como string separada por vírgula ou como array. Normaliza tudo pra
+// uma lista de URLs (mesma função usada em hospedagens e experiências).
+const normalizarImagens = (imagemUrl: any): string[] => {
+  if (!imagemUrl) return [];
+
+  if (Array.isArray(imagemUrl)) {
+    return imagemUrl.filter(
+      (url) => url && typeof url === "string" && url.trim() !== "",
+    );
+  }
+
+  if (typeof imagemUrl === "string") {
+    try {
+      const parsed = JSON.parse(imagemUrl);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((url) => url && url.trim() !== "");
+      }
+    } catch (e) {}
+
+    if (imagemUrl.includes(",")) {
+      return imagemUrl.split(",").map((url: string) => url.trim());
+    }
+
+    if (imagemUrl.trim()) {
+      return [imagemUrl.trim()];
+    }
+  }
+
+  return [];
+};
+
 export default function FavoritosScreen() {
   const router = useRouter();
 
@@ -56,7 +88,18 @@ export default function FavoritosScreen() {
       }
 
       const dados = await favoritosService.findByCliente(idCliente);
-      setFavoritos(dados);
+
+      // 🔍 Mostra no console exatamente o que a API devolveu (ajuda a
+      // achar a causa se algum favorito vier sem o produto).
+      console.log("Favoritos recebidos da API:", JSON.stringify(dados));
+
+      // 🔧 Aceita "produto" ou "produtos" como nome do vínculo e descarta
+      // favoritos sem produto (evita quebrar a lista inteira por um item).
+      const normalizados = (Array.isArray(dados) ? dados : [])
+        .map((f: any) => ({ ...f, produto: f.produto ?? f.produtos ?? null }))
+        .filter((f: any) => f.produto && f.produto.id !== undefined);
+
+      setFavoritos(normalizados as Favorito[]);
     } catch (error: any) {
       mostrarAviso(
         "Erro",
@@ -134,14 +177,12 @@ export default function FavoritosScreen() {
   const renderItem = ({ item }: { item: Favorito }) => {
     const produto = item.produto;
     const removendoEsse = removendoId === produto.id;
+    const capa = normalizarImagens(produto.imagem_url)[0];
 
     return (
       <View style={styles.card}>
-        {produto.imagem_url ? (
-          <Image
-            source={{ uri: produto.imagem_url.split(",")[0] }}
-            style={styles.cardImage}
-          />
+        {capa ? (
+          <Image source={{ uri: capa }} style={styles.cardImage} />
         ) : (
           <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
             <Ionicons name="image-outline" size={40} color="#CCC" />

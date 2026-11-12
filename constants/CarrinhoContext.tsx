@@ -8,6 +8,12 @@ import React, {
 
 import { Cupom, cuponsService } from "../services/cuponsService";
 
+// Desconto (em %) dado a quem monta um pacote (hospedagem + experiência).
+// ⚠️ Aqui é só pra EXIBIÇÃO — o valor realmente cobrado é calculado no
+// backend (DESCONTO_PACOTE_PERCENTUAL em reservas.service.js, padrão
+// 0.05). Se mudar um, mude o outro.
+export const DESCONTO_PACOTE_PERCENTUAL = 5;
+
 // Formato mínimo do produto que o carrinho precisa conhecer.
 // Ajuste os campos aqui se o seu ProdutoResponse tiver nomes diferentes.
 export interface ProdutoCarrinho {
@@ -23,6 +29,8 @@ export interface ProdutoCarrinho {
 export interface ItemCarrinho {
   produto: ProdutoCarrinho;
   quantidade: number;
+  // true quando o item entrou no carrinho pela tela de montar pacote
+  pacote?: boolean;
 }
 
 export interface ResultadoAplicarCupom {
@@ -33,12 +41,22 @@ export interface ResultadoAplicarCupom {
 interface CarrinhoContextData {
   itens: ItemCarrinho[];
   adicionarAoCarrinho: (produto: ProdutoCarrinho, quantidade?: number) => void;
+  // 🆕 Adiciona um pacote inteiro (hospedagem + experiências). Se algum
+  // produto já estava no carrinho, ele é substituído pelo do pacote
+  // (datas e quantidade do pacote valem).
+  adicionarPacoteAoCarrinho: (
+    itensPacote: { produto: ProdutoCarrinho; quantidade: number }[],
+  ) => void;
   removerDoCarrinho: (idProduto: number) => void;
   atualizarQuantidade: (idProduto: number, quantidade: number) => void;
   limparCarrinho: () => void;
   totalItens: number;
   totalPreco: number;
-  // 👇 Cupom — compartilhado entre Carrinho e Pagamento, pra não se
+  // 🆕 Desconto de pacote
+  pacoteAtivo: boolean;
+  itemTemDescontoPacote: (item: ItemCarrinho) => boolean;
+  descontoPacote: number;
+  // Cupom — compartilhado entre Carrinho e Pagamento, pra não se
   // perder ao navegar entre as telas.
   cupomAplicado: Cupom | null;
   aplicandoCupom: boolean;
@@ -78,6 +96,22 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  // 🆕 O desconto de pacote não acumula com cupom, então adicionar um
+  // pacote também remove o cupom que estivesse aplicado.
+  const adicionarPacoteAoCarrinho = (
+    itensPacote: { produto: ProdutoCarrinho; quantidade: number }[],
+  ) => {
+    setItens((atual) => {
+      const idsDoPacote = new Set(itensPacote.map((i) => i.produto.id));
+      const restantes = atual.filter((i) => !idsDoPacote.has(i.produto.id));
+      return [
+        ...restantes,
+        ...itensPacote.map((i) => ({ ...i, pacote: true })),
+      ];
+    });
+    setCupomAplicado(null);
+  };
+
   const removerDoCarrinho = (idProduto: number) => {
     setItens((atual) => atual.filter((item) => item.produto.id !== idProduto));
   };
@@ -94,7 +128,7 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  // 🔧 Limpar o carrinho também limpa o cupom aplicado — evita que um
+  // Limpar o carrinho também limpa o cupom aplicado — evita que um
   // cupom já usado fique "grudado" pra próxima compra.
   const limparCarrinho = () => {
     setItens([]);
@@ -115,13 +149,48 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
     [itens],
   );
 
-  // 🔧 Cupom: valida de verdade contra a API (nunca confia num valor
-  // fixo no código do front) e só guarda o cupom no estado se a
-  // validação passar.
+  // 🆕 O pacote só vale se ainda tiver hospedagem E pelo menos uma
+  // experiência marcadas como do pacote. Se o cliente remover a
+  // hospedagem (ou todas as experiências) do carrinho, o desconto some.
+  const pacoteAtivo = useMemo(() => {
+    const doPacote = itens.filter((i) => i.pacote);
+    return (
+      doPacote.some((i) => i.produto.tipo_produto === "hospedagem") &&
+      doPacote.some((i) => i.produto.tipo_produto === "experiencia")
+    );
+  }, [itens]);
+
+  const itemTemDescontoPacote = (item: ItemCarrinho): boolean =>
+    pacoteAtivo && !!item.pacote;
+
+  // Mesma conta do backend: arredonda o preço do item, aplica o
+  // percentual e arredonda de novo, item por item.
+  const descontoPacote = useMemo(() => {
+    if (!pacoteAtivo) return 0;
+    const total = itens
+      .filter((i) => i.pacote)
+      .reduce((soma, item) => {
+        const base = Number((item.produto.preco * item.quantidade).toFixed(2));
+        return (
+          soma + Number((base * (DESCONTO_PACOTE_PERCENTUAL / 100)).toFixed(2))
+        );
+      }, 0);
+    return Number(total.toFixed(2));
+  }, [itens, pacoteAtivo]);
+
+  // Valida de verdade contra a API (nunca confia num valor fixo no
+  // código do front) e só guarda o cupom no estado se a validação passar.
   const aplicarCupom = async (
     codigo: string,
     idCliente: number,
   ): Promise<ResultadoAplicarCupom> => {
+    if (pacoteAtivo) {
+      return {
+        sucesso: false,
+        mensagem: "Cupons não podem ser usados junto com o desconto de pacote.",
+      };
+    }
+
     setAplicandoCupom(true);
     try {
       const cupom = await cuponsService.validarParaUso(
@@ -156,8 +225,8 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
   }, [cupomAplicado, totalPreco]);
 
   const totalComDesconto = useMemo(
-    () => Number((totalPreco - valorDesconto).toFixed(2)),
-    [totalPreco, valorDesconto],
+    () => Number((totalPreco - valorDesconto - descontoPacote).toFixed(2)),
+    [totalPreco, valorDesconto, descontoPacote],
   );
 
   return (
@@ -165,11 +234,15 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
       value={{
         itens,
         adicionarAoCarrinho,
+        adicionarPacoteAoCarrinho,
         removerDoCarrinho,
         atualizarQuantidade,
         limparCarrinho,
         totalItens,
         totalPreco,
+        pacoteAtivo,
+        itemTemDescontoPacote,
+        descontoPacote,
         cupomAplicado,
         aplicandoCupom,
         aplicarCupom,

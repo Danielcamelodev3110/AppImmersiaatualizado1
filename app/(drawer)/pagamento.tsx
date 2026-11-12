@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router } from "expo-router";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,10 @@ import {
   View,
 } from "react-native";
 
-import { useCarrinho } from "../../constants/CarrinhoContext"; // ajuste o caminho conforme sua estrutura
+import {
+  DESCONTO_PACOTE_PERCENTUAL,
+  useCarrinho,
+} from "../../constants/CarrinhoContext"; // ajuste o caminho conforme sua estrutura
 
 import { pagamentoService } from "../../services/PagamentoService";
 import { FormaPagamento, reservaService } from "../../services/reservaService";
@@ -50,31 +53,30 @@ const formatarMoeda = (valor: number): string =>
   `R$ ${valor.toFixed(2).replace(".", ",")}`;
 
 export default function Pagamento() {
-  const { itens, totalPreco, limparCarrinho } = useCarrinho();
-
-  // Cupom aplicado no carrinho (vem pela navegação). O backend revalida
-  // o cupom ao criar a reserva e só o marca como usado depois que o
-  // pagamento é aprovado.
-  const params = useLocalSearchParams<{
-    codigoCupom?: string;
-    descontoPercentual?: string;
-  }>();
-  const codigoCupom = params.codigoCupom || "";
-  const descontoPercentual = Number(params.descontoPercentual) || 0;
+  // 🔧 cupomAplicado/valorDesconto vêm do CarrinhoContext — o mesmo
+  // cupom validado e aplicado lá no carrinho continua valendo aqui.
+  const {
+    itens,
+    totalPreco,
+    limparCarrinho,
+    cupomAplicado,
+    valorDesconto,
+    // 🆕 Desconto de pacote (hospedagem + experiência montados juntos)
+    descontoPacote,
+    itemTemDescontoPacote,
+  } = useCarrinho();
   const [formaSelecionada, setFormaSelecionada] =
     useState<FormaPagamento | null>(null);
   const [processando, setProcessando] = useState(false);
-  // Trava síncrona contra toque duplo: o state acima só atualiza no
-  // próximo render, então dois toques rápidos passavam os dois.
-  const travaEnvio = useRef(false);
 
-  // 🔧 FIX: agora soma a taxa da plataforma ao total exibido, igual ao
-  // carrinho, em vez de mostrar só o subtotal sem taxa.
+  // 🔧 FIX: agora desconta o cupom (se houver) antes de calcular a taxa,
+  // igual à ordem de cálculo do carrinho, e mostra a linha de desconto.
   const subtotal = totalPreco;
-  const valorDesconto = codigoCupom
-    ? Number(((subtotal * descontoPercentual) / 100).toFixed(2))
-    : 0;
-  const subtotalComDesconto = Number((subtotal - valorDesconto).toFixed(2));
+  // Cupom e desconto de pacote não acumulam (o contexto garante isso),
+  // então só um dos dois é > 0.
+  const subtotalComDesconto = Number(
+    (subtotal - valorDesconto - descontoPacote).toFixed(2),
+  );
   const taxaAplicativo = Number(
     (subtotalComDesconto * TAXA_PLATAFORMA_PERCENTUAL).toFixed(2),
   );
@@ -83,8 +85,6 @@ export default function Pagamento() {
   );
 
   const handleConfirmarPagamento = async () => {
-    if (travaEnvio.current) return;
-
     if (itens.length === 0) {
       Alert.alert(
         "Carrinho vazio",
@@ -98,7 +98,6 @@ export default function Pagamento() {
       return;
     }
 
-    travaEnvio.current = true;
     setProcessando(true);
 
     try {
@@ -124,7 +123,8 @@ export default function Pagamento() {
       // RPC) que faça tudo numa transação só. Por enquanto, como é uma
       // simulação, essa limitação é aceitável.
       const reservasCriadas = [];
-      for (const item of itens) {
+      for (let i = 0; i < itens.length; i++) {
+        const item = itens[i];
         const reserva = await reservaService.create({
           id_cliente: usuarioLogado.id,
           id_produto: item.produto.id,
@@ -132,7 +132,12 @@ export default function Pagamento() {
           data_checkin: item.produto.data_checkin,
           data_checkout: item.produto.data_checkout,
           forma_pagamento: formaSelecionada,
-          codigo_cupom: codigoCupom || undefined,
+          // 🆕 O backend aplica os 5% quando isso é true (e recalcula
+          // tudo por conta própria — nunca confia no total do app).
+          pacote: itemTemDescontoPacote(item),
+          // 🔧 O cupom é consumido na primeira reserva criada (o backend
+          // marca o resgate como usado), então só vai no primeiro item.
+          codigo_cupom: i === 0 ? cupomAplicado?.codigo || null : null,
         });
         reservasCriadas.push(reserva);
       }
@@ -171,7 +176,6 @@ export default function Pagamento() {
         "Erro ao processar o pagamento. Tente novamente.";
       Alert.alert("Erro no pagamento", mensagemErro);
     } finally {
-      travaEnvio.current = false;
       setProcessando(false);
     }
   };
@@ -241,10 +245,21 @@ export default function Pagamento() {
             <Text style={styles.subtotalLabel}>Subtotal</Text>
             <Text style={styles.subtotalValor}>{formatarMoeda(subtotal)}</Text>
           </View>
+          {descontoPacote > 0 && (
+            <View style={styles.totalLinha}>
+              <Text style={styles.descontoLabel}>
+                Desconto do pacote ({DESCONTO_PACOTE_PERCENTUAL}%)
+              </Text>
+              <Text style={styles.descontoValor}>
+                - {formatarMoeda(descontoPacote)}
+              </Text>
+            </View>
+          )}
           {valorDesconto > 0 && (
             <View style={styles.totalLinha}>
-              <Text style={styles.subtotalLabel}>
-                Desconto ({codigoCupom} · {descontoPercentual}%)
+              <Text style={styles.descontoLabel}>
+                Desconto ({cupomAplicado?.codigo} ·{" "}
+                {cupomAplicado?.percentual_desconto}%)
               </Text>
               <Text style={styles.descontoValor}>
                 - {formatarMoeda(valorDesconto)}
@@ -380,8 +395,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#DDD",
   },
+  descontoLabel: { fontSize: 14, color: "#1a7a42" },
+  descontoValor: { fontSize: 14, color: "#1a7a42", fontWeight: "600" },
   subtotalLabel: { fontSize: 14, color: "#666" },
-  descontoValor: { fontSize: 14, color: "#27ae60", fontWeight: "600" },
   subtotalValor: { fontSize: 14, color: "#333", fontWeight: "600" },
   totalLabel: { fontSize: 16, fontWeight: "bold", color: "#333" },
   totalValor: { fontSize: 18, fontWeight: "bold", color: "#584128" },
